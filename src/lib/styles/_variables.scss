@@ -1,0 +1,56 @@
+// === Colors ===
+$color-primary: #0073aa;
+$color-primary-hover: #005a87;
+$color-primary-light: #b4e7ff;  // lighten(primary, 52%)
+$color-primary-lighter: #aae4ff; // lighten(primary, 50%)
+$color-primary-bg: #a0e0ff;     // lighten(primary, 48%)
+$color-primary-bg-hover: #81d6ff; // lighten(primary, 42%)
+$color-accent: #00a0d2;
+$color-success: #46b450;
+$color-warning: #ffb900;
+$color-danger: #dc3232;
+
+// WP-style grays
+$color-bg: #f0f0f1;
+$color-bg-light: #f5f5f6;       // lighten(bg, 2%)
+$color-bg-lighter: #f3f3f3;     // lighten(bg, 1%)
+$color-surface: #ffffff;
+$color-border: #c3c4c7;
+$color-border-light: #e2e4e7;
+$color-text: #1d2327;
+$color-text-secondary: #646970;
+$color-text-muted: #a7aaad;
+
+// Node colors
+$color-node-bg: #ffffff;
+$color-node-selected: #e5f5fa;
+$color-node-header: #23282d;
+$color-node-header-hover: #39424a; // lighten(node-header, 10%)
+
+// === Typography (大屏友好) ===
+$font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+$font-size-xs: 0.75rem;
+$font-size-sm: 0.875rem;
+$font-size-base: 1rem;
+$font-size-lg: 1.25rem;
+$font-size-xl: 1.5rem;
+$font-size-2xl: 2rem;
+
+// === Spacing ===
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+
+// === Layout ===
+$topbar-height: 56px;
+$toolbox-width: 200px;
+$panel-min-width: 320px;
+
+// === Borders & Shadows ===
+$border-radius: 4px;
+$border-radius-lg: 8px;
+$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+$shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
+$shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
