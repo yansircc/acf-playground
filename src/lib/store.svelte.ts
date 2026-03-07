@@ -85,6 +85,42 @@ class ACFStore {
     return field;
   }
 
+  addSubField(entityId: string, repeaterFieldId: string, subtype: import('./types').AtomSubtype): Field | undefined {
+    const entity = this.entities.find((e) => e.id === entityId);
+    if (!entity) return;
+    const repeater = entity.fields.find((f) => f.id === repeaterFieldId);
+    if (!repeater || repeater.type.kind !== 'repeat') return;
+    const sub: Field = { id: uid(), name: subtype, type: { kind: 'atom', subtype } };
+    repeater.type.fields.push(sub);
+    // Initialize data slot in existing repeater rows
+    for (const row of (this.data[entityId] ?? [])) {
+      const repeatRows = row[repeaterFieldId];
+      if (Array.isArray(repeatRows)) {
+        for (const rr of repeatRows) {
+          if (!(sub.id in rr)) rr[sub.id] = '';
+        }
+      }
+    }
+    return sub;
+  }
+
+  removeSubField(entityId: string, repeaterFieldId: string, subFieldId: string): void {
+    const entity = this.entities.find((e) => e.id === entityId);
+    if (!entity) return;
+    const repeater = entity.fields.find((f) => f.id === repeaterFieldId);
+    if (!repeater || repeater.type.kind !== 'repeat') return;
+    repeater.type.fields = repeater.type.fields.filter((f) => f.id !== subFieldId);
+    // Clean data
+    for (const row of (this.data[entityId] ?? [])) {
+      const repeatRows = row[repeaterFieldId];
+      if (Array.isArray(repeatRows)) {
+        for (const rr of repeatRows) {
+          delete rr[subFieldId];
+        }
+      }
+    }
+  }
+
   removeField(entityId: string, fieldId: string): void {
     const entity = this.entities.find((e) => e.id === entityId);
     if (!entity) return;
@@ -101,6 +137,15 @@ class ACFStore {
     const field = entity.fields.find((f) => f.id === fieldId);
     if (!field) return;
     if (updates.name !== undefined) field.name = updates.name;
+  }
+
+  updateRefTarget(entityId: string, fieldId: string, target: string): void {
+    const entity = this.entities.find((e) => e.id === entityId);
+    if (!entity) return;
+    const field = entity.fields.find((f) => f.id === fieldId);
+    if (!field || field.type.kind !== 'ref') return;
+    // Replace the type object to ensure $derived edges recalculates
+    field.type = { ...field.type, target };
   }
 
   updateFieldData(entityId: string, fieldId: string, value: unknown, rowIndex = 0): void {

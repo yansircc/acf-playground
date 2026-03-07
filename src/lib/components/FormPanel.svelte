@@ -1,6 +1,15 @@
 <script lang="ts">
-  import type { Field, FieldType, Entity } from '$lib/types';
+  import type { Field, FieldType, Entity, AtomSubtype } from '$lib/types';
   import { store } from '$lib/store.svelte';
+
+  const atomSubtypes: { label: string; value: AtomSubtype }[] = [
+    { label: 'Text', value: 'text' },
+    { label: 'Textarea', value: 'textarea' },
+    { label: 'Number', value: 'number' },
+    { label: 'Email', value: 'email' },
+    { label: 'URL', value: 'url' },
+    { label: 'Image', value: 'image' },
+  ];
 
   const entity: Entity | undefined = $derived(store.currentEntity);
   const data: Record<string, unknown>[] = $derived(store.currentData);
@@ -39,9 +48,19 @@
     store.updateField(entity.id, fieldId, { name });
   }
 
+  function addSubField(repeaterFieldId: string, subtype: AtomSubtype) {
+    if (!entity) return;
+    store.addSubField(entity.id, repeaterFieldId, subtype);
+  }
+
+  function removeSubField(repeaterFieldId: string, subFieldId: string) {
+    if (!entity) return;
+    store.removeSubField(entity.id, repeaterFieldId, subFieldId);
+  }
+
   function handleRefTargetChange(field: Field, target: string) {
     if (!entity || field.type.kind !== 'ref') return;
-    field.type.target = target;
+    store.updateRefTarget(entity.id, field.id, target);
   }
 
   // Get other entities for ref field dropdown
@@ -163,6 +182,31 @@
 
             {:else if field.type.kind === 'repeat'}
               <div class="repeater-group">
+                <div class="sub-field-bar">
+                  <span class="sub-field-label">Sub-fields:</span>
+                  {#each field.type.fields as sf (sf.id)}
+                    <span class="sub-field-tag">
+                      {sf.name}
+                      <button class="tag-remove" onclick={() => removeSubField(field.id, sf.id)}>&times;</button>
+                    </span>
+                  {/each}
+                  <select
+                    class="add-sub-select"
+                    onchange={(e) => {
+                      const sel = e.target as HTMLSelectElement;
+                      if (sel.value) {
+                        addSubField(field.id, sel.value as AtomSubtype);
+                        sel.value = '';
+                      }
+                    }}
+                  >
+                    <option value="">+ Add</option>
+                    {#each atomSubtypes as opt}
+                      <option value={opt.value}>{opt.label}</option>
+                    {/each}
+                  </select>
+                </div>
+
                 {#each getRepeaterRows(field.id) as repeatRow, ri}
                   <div class="repeater-row">
                     <span class="row-index">#{ri + 1}</span>
@@ -178,7 +222,7 @@
                       </div>
                     {/each}
                     {#if field.type.fields.length === 0}
-                      <span class="empty-hint">Drop fields on this repeater node</span>
+                      <span class="empty-hint">Use "+ Add" above to add sub-fields</span>
                     {/if}
                     <button class="remove-row-btn" onclick={() => removeRepeatRow(field.id, ri)}>&times;</button>
                   </div>
@@ -324,6 +368,63 @@
     display: flex;
     flex-direction: column;
     gap: $spacing-sm;
+  }
+
+  .sub-field-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: $spacing-xs;
+    padding: $spacing-xs 0;
+    border-bottom: 1px dashed $color-border-light;
+    margin-bottom: $spacing-xs;
+  }
+
+  .sub-field-label {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    font-weight: 600;
+    margin-right: $spacing-xs;
+  }
+
+  .sub-field-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px $spacing-sm;
+    background: $color-primary-light;
+    color: $color-primary;
+    border-radius: 10px;
+    font-size: $font-size-xs;
+    font-weight: 500;
+  }
+
+  .tag-remove {
+    font-size: $font-size-xs;
+    color: $color-primary;
+    opacity: 0.6;
+    line-height: 1;
+    padding: 0 2px;
+
+    &:hover {
+      opacity: 1;
+      color: $color-danger;
+    }
+  }
+
+  .add-sub-select {
+    padding: 2px $spacing-sm;
+    border: 1px dashed $color-primary;
+    border-radius: $border-radius;
+    font-size: $font-size-xs;
+    color: $color-primary;
+    background: transparent;
+    cursor: pointer;
+
+    &:focus {
+      outline: none;
+      border-color: $color-primary;
+    }
   }
 
   .repeater-row {

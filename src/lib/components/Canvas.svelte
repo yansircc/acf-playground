@@ -98,14 +98,18 @@
     const hitNodeId = hitTestNode(position);
 
     if (payload.action === 'new-entity') {
-      store.addEntity('New Entity', position);
+      const name = prompt('Entity name:', 'New Entity');
+      if (name) store.addEntity(name, position);
     } else if (payload.action === 'add-field' && payload.fieldType) {
       if (hitNodeId) {
         store.addField(hitNodeId, payload.fieldType as FieldType);
         store.setSelected(hitNodeId);
       } else {
-        const entity = store.addEntity('New Entity', position);
-        store.addField(entity.id, payload.fieldType as FieldType);
+        const name = prompt('Create new entity with this field.\nEntity name:', 'New Entity');
+        if (name) {
+          const entity = store.addEntity(name, position);
+          store.addField(entity.id, payload.fieldType as FieldType);
+        }
       }
     }
   }
