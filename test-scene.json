@@ -1,0 +1,218 @@
+{
+  "entities": [
+    {
+      "id": "ent-product",
+      "name": "产品",
+      "fields": [
+        { "id": "f-prod-name", "name": "产品名称", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-prod-price", "name": "价格", "type": { "kind": "atom", "subtype": "number" } },
+        { "id": "f-prod-img", "name": "主图", "type": { "kind": "atom", "subtype": "image" } },
+        { "id": "f-prod-desc", "name": "产品描述", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-prod-url", "name": "详情链接", "type": { "kind": "atom", "subtype": "url" } },
+        { "id": "f-prod-specs", "name": "规格参数", "type": { "kind": "repeat", "fields": [
+          { "id": "sf-spec-key", "name": "参数名", "type": { "kind": "atom", "subtype": "text" } },
+          { "id": "sf-spec-val", "name": "参数值", "type": { "kind": "atom", "subtype": "text" } }
+        ] } },
+        { "id": "f-prod-supplier", "name": "供应商", "type": { "kind": "ref", "target": "ent-supplier", "cardinality": "1" } },
+        { "id": "f-prod-category", "name": "product_category", "type": { "kind": "ref", "target": "ent-category", "cardinality": "taxonomy" } }
+      ]
+    },
+    {
+      "id": "ent-supplier",
+      "name": "供应商",
+      "fields": [
+        { "id": "f-sup-name", "name": "公司名称", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-sup-contact", "name": "联系人", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-sup-email", "name": "邮箱", "type": { "kind": "atom", "subtype": "email" } },
+        { "id": "f-sup-website", "name": "官网", "type": { "kind": "atom", "subtype": "url" } },
+        { "id": "f-sup-region", "name": "地区", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-sup-products", "name": "供应产品", "type": { "kind": "ref", "target": "ent-product", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-order",
+      "name": "订单",
+      "fields": [
+        { "id": "f-ord-no", "name": "订单编号", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-ord-amount", "name": "订单金额", "type": { "kind": "atom", "subtype": "number" } },
+        { "id": "f-ord-date", "name": "下单日期", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-ord-note", "name": "备注", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-ord-customer", "name": "客户", "type": { "kind": "ref", "target": "ent-customer", "cardinality": "1" } },
+        { "id": "f-ord-items", "name": "订单明细", "type": { "kind": "repeat", "fields": [
+          { "id": "sf-item-product", "name": "产品名", "type": { "kind": "atom", "subtype": "text" } },
+          { "id": "sf-item-qty", "name": "数量", "type": { "kind": "atom", "subtype": "number" } },
+          { "id": "sf-item-unit-price", "name": "单价", "type": { "kind": "atom", "subtype": "number" } }
+        ] } }
+      ]
+    },
+    {
+      "id": "ent-customer",
+      "name": "客户",
+      "fields": [
+        { "id": "f-cust-name", "name": "客户名称", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-cust-email", "name": "邮箱", "type": { "kind": "atom", "subtype": "email" } },
+        { "id": "f-cust-country", "name": "国家", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-cust-company", "name": "公司", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-cust-orders", "name": "历史订单", "type": { "kind": "ref", "target": "ent-order", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-category",
+      "name": "产品分类",
+      "fields": [
+        { "id": "f-cat-name", "name": "text", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-cat-parent", "name": "parent", "type": { "kind": "ref", "target": "ent-category", "cardinality": "taxonomy" } }
+      ]
+    },
+    {
+      "id": "ent-showcase",
+      "name": "案例展示",
+      "fields": [
+        { "id": "f-show-title", "name": "案例标题", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-show-cover", "name": "封面图", "type": { "kind": "atom", "subtype": "image" } },
+        { "id": "f-show-desc", "name": "项目描述", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-show-customer", "name": "合作客户", "type": { "kind": "ref", "target": "ent-customer", "cardinality": "1" } },
+        { "id": "f-show-products", "name": "涉及产品", "type": { "kind": "ref", "target": "ent-product", "cardinality": "n" } }
+      ]
+    }
+  ],
+  "data": {
+    "ent-product": [
+      {
+        "f-prod-name": "多功能电动螺丝刀套装",
+        "f-prod-price": "299.00",
+        "f-prod-img": "https://picsum.photos/seed/screwdriver/400/300",
+        "f-prod-desc": "48合1精密螺丝刀套装，适用于手机、电脑、家电等精密设备维修。配备磁性吸附批头，操作便捷。",
+        "f-prod-url": "https://example.com/product/screwdriver-kit",
+        "f-prod-specs": [
+          { "sf-spec-key": "材质", "sf-spec-val": "铬钒钢" },
+          { "sf-spec-key": "批头数量", "sf-spec-val": "48个" },
+          { "sf-spec-key": "电压", "sf-spec-val": "3.6V" },
+          { "sf-spec-key": "重量", "sf-spec-val": "580g" }
+        ]
+      },
+      {
+        "f-prod-name": "LED太阳能庭院灯",
+        "f-prod-price": "158.00",
+        "f-prod-img": "https://picsum.photos/seed/solar-light/400/300",
+        "f-prod-desc": "IP65防水等级，太阳能充电，自动感光开关，适合花园、庭院、走道照明。",
+        "f-prod-url": "https://example.com/product/solar-garden-light",
+        "f-prod-specs": [
+          { "sf-spec-key": "功率", "sf-spec-val": "5W" },
+          { "sf-spec-key": "防水等级", "sf-spec-val": "IP65" },
+          { "sf-spec-key": "充电时间", "sf-spec-val": "6-8小时" },
+          { "sf-spec-key": "续航", "sf-spec-val": "8-12小时" }
+        ]
+      },
+      {
+        "f-prod-name": "不锈钢真空保温杯",
+        "f-prod-price": "89.50",
+        "f-prod-img": "https://picsum.photos/seed/thermos/400/300",
+        "f-prod-desc": "304不锈钢内胆，双层真空保温，12小时保温保冷，500ml大容量。",
+        "f-prod-url": "https://example.com/product/thermos-bottle",
+        "f-prod-specs": [
+          { "sf-spec-key": "容量", "sf-spec-val": "500ml" },
+          { "sf-spec-key": "材质", "sf-spec-val": "304不锈钢" },
+          { "sf-spec-key": "保温时长", "sf-spec-val": "12小时" }
+        ]
+      }
+    ],
+    "ent-supplier": [
+      {
+        "f-sup-name": "深圳华贸科技有限公司",
+        "f-sup-contact": "张伟",
+        "f-sup-email": "zhangwei@huamao-tech.com",
+        "f-sup-website": "https://huamao-tech.com",
+        "f-sup-region": "广东深圳"
+      },
+      {
+        "f-sup-name": "义乌瑞丰电子商行",
+        "f-sup-contact": "李娜",
+        "f-sup-email": "lina@ruifeng-electronics.com",
+        "f-sup-website": "https://ruifeng-electronics.com",
+        "f-sup-region": "浙江义乌"
+      }
+    ],
+    "ent-order": [
+      {
+        "f-ord-no": "ORD-2024-00158",
+        "f-ord-amount": "23800.00",
+        "f-ord-date": "2024-03-15",
+        "f-ord-note": "客户要求3月底前发货，走海运到汉堡港",
+        "f-ord-items": [
+          { "sf-item-product": "多功能电动螺丝刀套装", "sf-item-qty": "50", "sf-item-unit-price": "299.00" },
+          { "sf-item-product": "LED太阳能庭院灯", "sf-item-qty": "40", "sf-item-unit-price": "158.00" }
+        ]
+      },
+      {
+        "f-ord-no": "ORD-2024-00203",
+        "f-ord-amount": "8950.00",
+        "f-ord-date": "2024-04-02",
+        "f-ord-note": "首次合作客户，需提供样品确认后再大批量下单",
+        "f-ord-items": [
+          { "sf-item-product": "不锈钢真空保温杯", "sf-item-qty": "100", "sf-item-unit-price": "89.50" }
+        ]
+      },
+      {
+        "f-ord-no": "ORD-2024-00271",
+        "f-ord-amount": "47400.00",
+        "f-ord-date": "2024-05-10",
+        "f-ord-note": "返单客户，品质要求严格，需逐件检验",
+        "f-ord-items": [
+          { "sf-item-product": "LED太阳能庭院灯", "sf-item-qty": "200", "sf-item-unit-price": "158.00" },
+          { "sf-item-product": "多功能电动螺丝刀套装", "sf-item-qty": "50", "sf-item-unit-price": "299.00" }
+        ]
+      }
+    ],
+    "ent-customer": [
+      {
+        "f-cust-name": "Hans Mueller",
+        "f-cust-email": "hans@mueller-import.de",
+        "f-cust-country": "德国",
+        "f-cust-company": "Mueller Import GmbH"
+      },
+      {
+        "f-cust-name": "Sarah Johnson",
+        "f-cust-email": "sarah@brightliving.com",
+        "f-cust-country": "美国",
+        "f-cust-company": "Bright Living LLC"
+      },
+      {
+        "f-cust-name": "田中健太",
+        "f-cust-email": "tanaka@sakura-trading.jp",
+        "f-cust-country": "日本",
+        "f-cust-company": "桜貿易株式会社"
+      }
+    ],
+    "ent-category": [
+      { "f-cat-name": "工具", "f-cat-parent": "" },
+      { "f-cat-name": "电动工具", "f-cat-parent": 0 },
+      { "f-cat-name": "手动工具", "f-cat-parent": 0 },
+      { "f-cat-name": "家居照明", "f-cat-parent": "" },
+      { "f-cat-name": "太阳能灯具", "f-cat-parent": 3 },
+      { "f-cat-name": "生活用品", "f-cat-parent": "" },
+      { "f-cat-name": "保温杯具", "f-cat-parent": 5 }
+    ],
+    "ent-showcase": [
+      {
+        "f-show-title": "德国五金连锁店定制工具套装项目",
+        "f-show-cover": "https://picsum.photos/seed/showcase1/800/400",
+        "f-show-desc": "为Mueller Import定制的48合1螺丝刀套装，包含定制logo印刷和德语说明书。首批5000套已交付，客户反馈良好，正在洽谈二期合作。"
+      },
+      {
+        "f-show-title": "美国户外照明批量采购案例",
+        "f-show-cover": "https://picsum.photos/seed/showcase2/800/400",
+        "f-show-desc": "Bright Living采购的太阳能庭院灯系列，通过FCC和UL认证。产品已进入Home Depot线上渠道，月均销量2000+。"
+      }
+    ]
+  },
+  "positions": {
+    "ent-product":  { "x": 50,  "y": 50 },
+    "ent-supplier": { "x": 450, "y": 50 },
+    "ent-order":    { "x": 50,  "y": 400 },
+    "ent-customer": { "x": 450, "y": 400 },
+    "ent-category": { "x": 850, "y": 50 },
+    "ent-showcase": { "x": 850, "y": 400 }
+  },
+  "selected": "ent-product"
+}

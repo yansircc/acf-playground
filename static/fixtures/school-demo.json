@@ -1,0 +1,240 @@
+{
+  "entities": [
+    {
+      "id": "ent-school",
+      "name": "学校",
+      "fields": [
+        { "id": "f-school-name", "name": "校名", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-school-addr", "name": "地址", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-school-url", "name": "官网", "type": { "kind": "atom", "subtype": "url" } },
+        { "id": "f-school-logo", "name": "校徽", "type": { "kind": "atom", "subtype": "image" } },
+        { "id": "f-school-teachers", "name": "全部教师", "type": { "kind": "ref", "target": "ent-teacher", "cardinality": "n" } },
+        { "id": "f-school-classes", "name": "全部班级", "type": { "kind": "ref", "target": "ent-class", "cardinality": "n" } },
+        { "id": "f-school-subjects", "name": "开设科目", "type": { "kind": "ref", "target": "ent-subject", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-class",
+      "name": "班级",
+      "fields": [
+        { "id": "f-class-name", "name": "班级名称", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-class-size", "name": "人数", "type": { "kind": "atom", "subtype": "number" } },
+        { "id": "f-class-slogan", "name": "班训", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-class-school", "name": "所属学校", "type": { "kind": "ref", "target": "ent-school", "cardinality": "1" } },
+        { "id": "f-class-teacher", "name": "班主任", "type": { "kind": "ref", "target": "ent-teacher", "cardinality": "1" } },
+        { "id": "f-class-students", "name": "班级学生", "type": { "kind": "ref", "target": "ent-student", "cardinality": "n" } },
+        { "id": "f-class-subjects", "name": "开设科目", "type": { "kind": "ref", "target": "ent-subject", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-teacher",
+      "name": "班主任",
+      "fields": [
+        { "id": "f-teacher-name", "name": "姓名", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-teacher-email", "name": "邮箱", "type": { "kind": "atom", "subtype": "email" } },
+        { "id": "f-teacher-phone", "name": "电话", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-teacher-bio", "name": "简介", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-teacher-photo", "name": "照片", "type": { "kind": "atom", "subtype": "image" } },
+        { "id": "f-teacher-school", "name": "所属学校", "type": { "kind": "ref", "target": "ent-school", "cardinality": "1" } },
+        { "id": "f-teacher-class", "name": "管理班级", "type": { "kind": "ref", "target": "ent-class", "cardinality": "1" } },
+        { "id": "f-teacher-subjects", "name": "任教科目", "type": { "kind": "ref", "target": "ent-subject", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-subject",
+      "name": "科目",
+      "fields": [
+        { "id": "f-subject-name", "name": "科目名称", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-subject-credit", "name": "学分", "type": { "kind": "atom", "subtype": "number" } },
+        { "id": "f-subject-desc", "name": "描述", "type": { "kind": "atom", "subtype": "textarea" } },
+        { "id": "f-subject-school", "name": "所属学校", "type": { "kind": "ref", "target": "ent-school", "cardinality": "1" } },
+        { "id": "f-subject-teachers", "name": "任课教师", "type": { "kind": "ref", "target": "ent-teacher", "cardinality": "n" } },
+        { "id": "f-subject-classes", "name": "开课班级", "type": { "kind": "ref", "target": "ent-class", "cardinality": "n" } }
+      ]
+    },
+    {
+      "id": "ent-student",
+      "name": "学生",
+      "fields": [
+        { "id": "f-student-name", "name": "姓名", "type": { "kind": "atom", "subtype": "text" } },
+        { "id": "f-student-photo", "name": "头像", "type": { "kind": "atom", "subtype": "image" } },
+        { "id": "f-student-email", "name": "邮箱", "type": { "kind": "atom", "subtype": "email" } },
+        { "id": "f-student-class", "name": "所在班级", "type": { "kind": "ref", "target": "ent-class", "cardinality": "1" } },
+        { "id": "f-student-school", "name": "所属学校", "type": { "kind": "ref", "target": "ent-school", "cardinality": "1" } },
+        { "id": "f-student-scores", "name": "成绩",
+          "type": {
+            "kind": "repeat",
+            "fields": [
+              { "id": "f-score-subject", "name": "科目", "type": { "kind": "ref", "target": "ent-subject", "cardinality": "1" } },
+              { "id": "f-score-score", "name": "分数", "type": { "kind": "atom", "subtype": "number" } },
+              { "id": "f-score-grade", "name": "等级", "type": { "kind": "atom", "subtype": "text" } }
+            ]
+          }
+        },
+        { "id": "f-student-subjects", "name": "选修科目", "type": { "kind": "ref", "target": "ent-subject", "cardinality": "n" } }
+      ]
+    }
+  ],
+  "data": {
+    "ent-school": [
+      {
+        "f-school-name": "杭州市第一中学",
+        "f-school-addr": "杭州市西湖区学院路88号",
+        "f-school-url": "https://www.hz1z.edu.cn",
+        "f-school-logo": "https://placehold.co/200x200/1a56db/white?text=杭一中",
+        "f-school-teachers": [0, 1, 2],
+        "f-school-classes": [0, 1],
+        "f-school-subjects": [0, 1, 2, 3]
+      }
+    ],
+    "ent-class": [
+      {
+        "f-class-name": "高一(3)班",
+        "f-class-size": "45",
+        "f-class-slogan": "博学笃行，止于至善",
+        "f-class-school": 0,
+        "f-class-teacher": 0,
+        "f-class-students": [0, 1],
+        "f-class-subjects": [0, 1, 2]
+      },
+      {
+        "f-class-name": "高二(1)班",
+        "f-class-size": "42",
+        "f-class-slogan": "志存高远，脚踏实地",
+        "f-class-school": 0,
+        "f-class-teacher": 1,
+        "f-class-students": [2, 3],
+        "f-class-subjects": [0, 1, 3]
+      }
+    ],
+    "ent-teacher": [
+      {
+        "f-teacher-name": "王建国",
+        "f-teacher-email": "wang.jianguo@hz1z.edu.cn",
+        "f-teacher-phone": "13800138001",
+        "f-teacher-bio": "数学高级教师，从教18年，曾获市优秀教师称号。擅长引导学生建立数学思维，课堂风格活泼生动。",
+        "f-teacher-photo": "https://placehold.co/150x150/0891b2/white?text=王",
+        "f-teacher-school": 0,
+        "f-teacher-class": 0,
+        "f-teacher-subjects": [0]
+      },
+      {
+        "f-teacher-name": "李秀英",
+        "f-teacher-email": "li.xiuying@hz1z.edu.cn",
+        "f-teacher-phone": "13800138002",
+        "f-teacher-bio": "英语特级教师，海归硕士，主攻英语口语和写作教学。曾指导学生获全国英语竞赛一等奖。",
+        "f-teacher-photo": "https://placehold.co/150x150/7c3aed/white?text=李",
+        "f-teacher-school": 0,
+        "f-teacher-class": 1,
+        "f-teacher-subjects": [1]
+      },
+      {
+        "f-teacher-name": "陈明达",
+        "f-teacher-email": "chen.mingda@hz1z.edu.cn",
+        "f-teacher-phone": "13800138003",
+        "f-teacher-bio": "物理一级教师，实验教学专家。自主研发了十余套物理实验教具，深受学生喜爱。",
+        "f-teacher-photo": "https://placehold.co/150x150/059669/white?text=陈",
+        "f-teacher-school": 0,
+        "f-teacher-class": 0,
+        "f-teacher-subjects": [2]
+      }
+    ],
+    "ent-subject": [
+      {
+        "f-subject-name": "数学",
+        "f-subject-credit": "6",
+        "f-subject-desc": "高中数学，涵盖代数、几何、概率统计与微积分初步。培养逻辑推理和抽象思维能力。",
+        "f-subject-school": 0,
+        "f-subject-teachers": [0],
+        "f-subject-classes": [0, 1]
+      },
+      {
+        "f-subject-name": "英语",
+        "f-subject-credit": "6",
+        "f-subject-desc": "高中英语，包含听说读写四项核心技能训练，兼顾语法体系和跨文化交际能力。",
+        "f-subject-school": 0,
+        "f-subject-teachers": [1],
+        "f-subject-classes": [0, 1]
+      },
+      {
+        "f-subject-name": "物理",
+        "f-subject-credit": "4",
+        "f-subject-desc": "高中物理，涵盖力学、电磁学、光学和近代物理。注重实验探究和理论联系实际。",
+        "f-subject-school": 0,
+        "f-subject-teachers": [2],
+        "f-subject-classes": [0]
+      },
+      {
+        "f-subject-name": "化学",
+        "f-subject-credit": "4",
+        "f-subject-desc": "高中化学，涵盖无机化学、有机化学、化学平衡等核心知识模块。",
+        "f-subject-school": 0,
+        "f-subject-teachers": [],
+        "f-subject-classes": [1]
+      }
+    ],
+    "ent-student": [
+      {
+        "f-student-name": "张小明",
+        "f-student-photo": "https://placehold.co/120x120/f59e0b/white?text=张",
+        "f-student-email": "zhangxm@student.hz1z.edu.cn",
+        "f-student-class": 0,
+        "f-student-school": 0,
+        "f-student-subjects": [0, 1, 2],
+        "f-student-scores": [
+          { "f-score-subject": 0, "f-score-score": "92", "f-score-grade": "A" },
+          { "f-score-subject": 1, "f-score-score": "85", "f-score-grade": "B+" },
+          { "f-score-subject": 2, "f-score-score": "96", "f-score-grade": "A+" }
+        ]
+      },
+      {
+        "f-student-name": "李小红",
+        "f-student-photo": "https://placehold.co/120x120/ec4899/white?text=李",
+        "f-student-email": "lixh@student.hz1z.edu.cn",
+        "f-student-class": 0,
+        "f-student-school": 0,
+        "f-student-subjects": [0, 1, 2, 3],
+        "f-student-scores": [
+          { "f-score-subject": 0, "f-score-score": "88", "f-score-grade": "B+" },
+          { "f-score-subject": 1, "f-score-score": "95", "f-score-grade": "A+" },
+          { "f-score-subject": 2, "f-score-score": "78", "f-score-grade": "B" },
+          { "f-score-subject": 3, "f-score-score": "90", "f-score-grade": "A" }
+        ]
+      },
+      {
+        "f-student-name": "赵大力",
+        "f-student-photo": "https://placehold.co/120x120/10b981/white?text=赵",
+        "f-student-email": "zhaodl@student.hz1z.edu.cn",
+        "f-student-class": 1,
+        "f-student-school": 0,
+        "f-student-subjects": [0, 1, 2],
+        "f-student-scores": [
+          { "f-score-subject": 0, "f-score-score": "76", "f-score-grade": "B" },
+          { "f-score-subject": 1, "f-score-score": "82", "f-score-grade": "B" },
+          { "f-score-subject": 2, "f-score-score": "91", "f-score-grade": "A" }
+        ]
+      },
+      {
+        "f-student-name": "周文静",
+        "f-student-photo": "https://placehold.co/120x120/8b5cf6/white?text=周",
+        "f-student-email": "zhouwj@student.hz1z.edu.cn",
+        "f-student-class": 1,
+        "f-student-school": 0,
+        "f-student-subjects": [0, 1, 3],
+        "f-student-scores": [
+          { "f-score-subject": 0, "f-score-score": "95", "f-score-grade": "A+" },
+          { "f-score-subject": 1, "f-score-score": "91", "f-score-grade": "A" },
+          { "f-score-subject": 3, "f-score-score": "97", "f-score-grade": "A+" }
+        ]
+      }
+    ]
+  },
+  "positions": {
+    "ent-school": { "x": 400, "y": 0 },
+    "ent-class": { "x": 100, "y": 300 },
+    "ent-teacher": { "x": 700, "y": 300 },
+    "ent-subject": { "x": 900, "y": 0 },
+    "ent-student": { "x": 400, "y": 600 }
+  },
+  "selected": "ent-student"
+}
