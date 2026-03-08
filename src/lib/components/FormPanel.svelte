@@ -1,26 +1,38 @@
 <script lang="ts">
-  import type { Field, FieldType, Entity, AtomSubtype } from '$lib/types';
+  import type { FieldType, Entity } from '$lib/types';
   import { store } from '$lib/store.svelte';
-
-  const atomSubtypes: { label: string; value: AtomSubtype }[] = [
-    { label: 'Text', value: 'text' },
-    { label: 'Textarea', value: 'textarea' },
-    { label: 'Number', value: 'number' },
-    { label: 'Email', value: 'email' },
-    { label: 'URL', value: 'url' },
-    { label: 'Image', value: 'image' },
-  ];
+  import { generateMockRow } from '$lib/mock-data';
+  import TaxonomyEditor from './TaxonomyEditor.svelte';
+  import RefField from './RefField.svelte';
+  import RepeaterField from './RepeaterField.svelte';
 
   const entity: Entity | undefined = $derived(store.currentEntity);
   const data: Record<string, unknown>[] = $derived(store.currentData);
 
-  function getFieldValue(fieldId: string, rowIndex = 0): unknown {
-    return data[rowIndex]?.[fieldId] ?? '';
+  // 多行展开状态
+  let expandedRow: number | null = $state(null);
+
+  // 当实体切换时重置展开状态；只有 1 行时自动展开
+  let lastEntityId: string | null = null;
+  $effect(() => {
+    const eid = entity?.id ?? null;
+    if (eid !== lastEntityId) {
+      lastEntityId = eid;
+      expandedRow = data.length === 1 ? 0 : null;
+    }
+  });
+
+  function getRowTitle(entityId: string, rowIndex: number): string {
+    const ent = store.entities.find((e) => e.id === entityId);
+    if (!ent) return `记录 #${rowIndex + 1}`;
+    const textField = ent.fields.find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
+    if (!textField) return `记录 #${rowIndex + 1}`;
+    const val = store.data[entityId]?.[rowIndex]?.[textField.id];
+    return (val as string) || `记录 #${rowIndex + 1}`;
   }
 
-  function getRepeaterRows(fieldId: string, rowIndex = 0): Record<string, unknown>[] {
-    const val = data[rowIndex]?.[fieldId];
-    return Array.isArray(val) ? val : [{}];
+  function getFieldValue(fieldId: string, rowIndex = 0): unknown {
+    return data[rowIndex]?.[fieldId] ?? '';
   }
 
   function handleInput(fieldId: string, value: unknown, rowIndex = 0) {
@@ -28,52 +40,67 @@
     store.updateFieldData(entity.id, fieldId, value, rowIndex);
   }
 
-  function handleRepeaterInput(fieldId: string, subFieldId: string, value: unknown, repeatIndex: number, rowIndex = 0) {
-    if (!entity) return;
-    store.updateRepeaterData(entity.id, fieldId, subFieldId, value, rowIndex, repeatIndex);
-  }
-
-  function addRepeatRow(fieldId: string, rowIndex = 0) {
-    if (!entity) return;
-    store.addRepeaterRow(entity.id, fieldId, rowIndex);
-  }
-
-  function removeRepeatRow(fieldId: string, repeatIndex: number, rowIndex = 0) {
-    if (!entity) return;
-    store.removeRepeaterRow(entity.id, fieldId, repeatIndex, rowIndex);
-  }
-
   function handleFieldNameChange(fieldId: string, name: string) {
     if (!entity) return;
     store.updateField(entity.id, fieldId, { name });
   }
 
-  function addSubField(repeaterFieldId: string, subtype: AtomSubtype) {
+  function handleAddRow() {
     if (!entity) return;
-    store.addSubField(entity.id, repeaterFieldId, subtype);
+    store.addDataRow(entity.id);
+    expandedRow = (store.data[entity.id]?.length ?? 1) - 1;
   }
 
-  function removeSubField(repeaterFieldId: string, subFieldId: string) {
+  function handleRemoveRow(rowIndex: number) {
     if (!entity) return;
-    store.removeSubField(entity.id, repeaterFieldId, subFieldId);
+    store.removeDataRow(entity.id, rowIndex);
+    if (expandedRow === rowIndex) {
+      expandedRow = null;
+    } else if (expandedRow !== null && expandedRow > rowIndex) {
+      expandedRow--;
+    }
   }
 
-  function handleRefTargetChange(field: Field, target: string) {
-    if (!entity || field.type.kind !== 'ref') return;
-    store.updateRefTarget(entity.id, field.id, target);
+  function handleMock() {
+    if (!entity) return;
+    const row = generateMockRow(entity, store.data[entity.id]?.length ?? 0, store.data);
+    store.addDataRow(entity.id);
+    const newIdx = (store.data[entity.id]?.length ?? 1) - 1;
+    for (const [fieldId, value] of Object.entries(row)) {
+      store.data[entity.id][newIdx][fieldId] = value;
+    }
+    expandedRow = newIdx;
   }
 
-  // Get other entities for ref field dropdown
-  const otherEntities = $derived(
-    store.entities.filter((e) => entity && e.id !== entity.id)
-  );
+  function toggleRow(rowIndex: number) {
+    expandedRow = expandedRow === rowIndex ? null : rowIndex;
+  }
 
   function subtypeLabel(type: FieldType): string {
     switch (type.kind) {
-      case 'atom': return type.subtype.charAt(0).toUpperCase() + type.subtype.slice(1);
-      case 'repeat': return 'Repeater';
-      case 'ref': return type.cardinality === '1' ? 'Post Object' : 'Relationship';
+      case 'atom':
+        switch (type.subtype) {
+          case 'text': return '文本';
+          case 'textarea': return '多行文本';
+          case 'number': return '数字';
+          case 'email': return '邮箱';
+          case 'url': return '链接';
+          case 'image': return '图片';
+        }
+        return type.subtype;
+      case 'repeat': return '重复器';
+      case 'ref':
+        switch (type.cardinality) {
+          case '1': return '文章对象';
+          case 'n': return '关联';
+          case 'taxonomy': return '分类';
+        }
     }
+  }
+
+  function isTaxonomyEntity(): boolean {
+    if (!entity) return false;
+    return store.isSelfRefEntity(entity.id);
   }
 </script>
 
@@ -86,170 +113,126 @@
         value={entity.name}
         oninput={(e) => { entity.name = (e.target as HTMLInputElement).value; }}
       />
-      <span class="field-count">{entity.fields.length} fields</span>
+      <span class="field-count">{entity.fields.length} 个字段</span>
     </div>
 
     <div class="form-body">
       {#if entity.fields.length === 0}
         <div class="empty-state">
-          Drag fields from the toolbox onto the entity node
+          从上方拖拽字段到画布中的实体节点
         </div>
       {/if}
 
-      {#each entity.fields as field (field.id)}
-        <div class="field-group">
-          <div class="field-header">
-            <span class="field-type-badge">{subtypeLabel(field.type)}</span>
-            <input
-              class="field-name-input"
-              type="text"
-              value={field.name}
-              oninput={(e) => handleFieldNameChange(field.id, (e.target as HTMLInputElement).value)}
-            />
-          </div>
+      {#if isTaxonomyEntity()}
+        <TaxonomyEditor {entity} />
 
-          <div class="field-control">
-            {#if field.type.kind === 'atom'}
-              {#if field.type.subtype === 'text'}
-                <input
-                  type="text"
-                  class="wp-input"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value)}
-                  placeholder="Enter text..."
-                />
-              {:else if field.type.subtype === 'number'}
-                <input
-                  type="number"
-                  class="wp-input"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value)}
-                  placeholder="0"
-                />
-              {:else if field.type.subtype === 'email'}
-                <input
-                  type="email"
-                  class="wp-input"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value)}
-                  placeholder="user@example.com"
-                />
-              {:else if field.type.subtype === 'url'}
-                <input
-                  type="url"
-                  class="wp-input"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value)}
-                  placeholder="https://..."
-                />
-              {:else if field.type.subtype === 'textarea'}
-                <textarea
-                  class="wp-input wp-textarea"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLTextAreaElement).value)}
-                  placeholder="Enter text..."
-                  rows="3"
-                ></textarea>
-              {:else if field.type.subtype === 'image'}
-                <input
-                  type="url"
-                  class="wp-input"
-                  value={getFieldValue(field.id) as string}
-                  oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value)}
-                  placeholder="Image URL..."
-                />
-                {#if getFieldValue(field.id)}
-                  <img
-                    class="image-preview"
-                    src={getFieldValue(field.id) as string}
-                    alt="Preview"
-                    onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                {/if}
-              {/if}
-
-            {:else if field.type.kind === 'ref'}
-              <select
-                class="wp-input"
-                value={field.type.target}
-                onchange={(e) => handleRefTargetChange(field, (e.target as HTMLSelectElement).value)}
-              >
-                <option value="">-- Select Entity --</option>
-                {#each otherEntities as other}
-                  <option value={other.id}>{other.name}</option>
-                {/each}
-              </select>
-
-            {:else if field.type.kind === 'repeat'}
-              <div class="repeater-group">
-                <div class="sub-field-bar">
-                  <span class="sub-field-label">Sub-fields:</span>
-                  {#each field.type.fields as sf (sf.id)}
-                    <span class="sub-field-tag">
-                      {sf.name}
-                      <button class="tag-remove" onclick={() => removeSubField(field.id, sf.id)}>&times;</button>
-                    </span>
-                  {/each}
-                  <select
-                    class="add-sub-select"
-                    onchange={(e) => {
-                      const sel = e.target as HTMLSelectElement;
-                      if (sel.value) {
-                        addSubField(field.id, sel.value as AtomSubtype);
-                        sel.value = '';
-                      }
-                    }}
-                  >
-                    <option value="">+ Add</option>
-                    {#each atomSubtypes as opt}
-                      <option value={opt.value}>{opt.label}</option>
-                    {/each}
-                  </select>
-                </div>
-
-                {#each getRepeaterRows(field.id) as repeatRow, ri}
-                  <div class="repeater-row">
-                    <span class="row-index">#{ri + 1}</span>
-                    {#each field.type.fields as subField (subField.id)}
-                      <div class="sub-field">
-                        <label class="sub-label">{subField.name}</label>
-                        <input
-                          type="text"
-                          class="wp-input wp-input-sm"
-                          value={(repeatRow[subField.id] ?? '') as string}
-                          oninput={(e) => handleRepeaterInput(field.id, subField.id, (e.target as HTMLInputElement).value, ri)}
-                        />
-                      </div>
-                    {/each}
-                    {#if field.type.fields.length === 0}
-                      <span class="empty-hint">Use "+ Add" above to add sub-fields</span>
-                    {/if}
-                    <button class="remove-row-btn" onclick={() => removeRepeatRow(field.id, ri)}>&times;</button>
-                  </div>
-                {/each}
-                <button class="add-row-btn" onclick={() => addRepeatRow(field.id)}>
-                  + Add Row
-                </button>
-              </div>
-            {/if}
+      {:else if entity.fields.length > 0}
+        <!-- Normal entity: multi-row list + expand -->
+        <div class="row-list-header">
+          <span class="row-count">{data.length} 条记录</span>
+          <div class="row-actions">
+            <button class="action-btn mock-btn" onclick={handleMock}>Mock</button>
+            <button class="action-btn add-btn" onclick={handleAddRow}>+</button>
           </div>
         </div>
-      {/each}
+
+        <div class="row-list">
+          {#each data as _row, ri}
+            <div class="row-item" class:expanded={expandedRow === ri}>
+              <div class="row-item-header" onclick={() => toggleRow(ri)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(ri); }}>
+                <span class="row-toggle">{expandedRow === ri ? '▾' : '▸'}</span>
+                <span class="row-title">{getRowTitle(entity.id, ri)}</span>
+                <button class="row-remove" onclick={(e) => { e.stopPropagation(); handleRemoveRow(ri); }}
+                  disabled={data.length <= 1}>&times;</button>
+              </div>
+
+              {#if expandedRow === ri}
+                <div class="row-fields">
+                  {#each entity.fields as field (field.id)}
+                    <div class="field-group">
+                      <div class="field-header">
+                        <span class="field-type-badge" class:taxonomy={field.type.kind === 'ref' && field.type.cardinality === 'taxonomy'}>{subtypeLabel(field.type)}</span>
+                        <input
+                          class="field-name-input"
+                          type="text"
+                          value={field.name}
+                          oninput={(e) => handleFieldNameChange(field.id, (e.target as HTMLInputElement).value)}
+                        />
+                      </div>
+
+                      <div class="field-control">
+                        {#if field.type.kind === 'atom'}
+                          {#if field.type.subtype === 'text'}
+                            <input type="text" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="输入文本..." />
+                          {:else if field.type.subtype === 'number'}
+                            <input type="number" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="0" />
+                          {:else if field.type.subtype === 'email'}
+                            <input type="email" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="user@example.com" />
+                          {:else if field.type.subtype === 'url'}
+                            <input type="url" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="https://..." />
+                          {:else if field.type.subtype === 'textarea'}
+                            <textarea class="wp-input wp-textarea"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLTextAreaElement).value, ri)}
+                              placeholder="输入文本..." rows="3"></textarea>
+                          {:else if field.type.subtype === 'image'}
+                            <input type="url" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="图片 URL..." />
+                            {#if getFieldValue(field.id, ri)}
+                              <img class="image-preview"
+                                src={getFieldValue(field.id, ri) as string} alt="预览"
+                                onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            {/if}
+                          {/if}
+
+                        {:else if field.type.kind === 'ref'}
+                          <RefField {field} {entity} rowIndex={ri}
+                            value={getFieldValue(field.id, ri)}
+                            onchange={(val) => handleInput(field.id, val, ri)} />
+
+                        {:else if field.type.kind === 'repeat'}
+                          <RepeaterField field={{ ...field, type: field.type }} {entity} rowIndex={ri} />
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   {:else}
     <div class="empty-state full">
-      <p>Select an entity to edit its fields</p>
+      <p>选择一个实体以编辑其字段</p>
     </div>
   {/if}
 </div>
 
 <style lang="scss">
   .form-panel {
-    width: $panel-min-width;
+    width: $panel-width;
     background: $color-bg;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-left: 1px solid $color-border;
+    flex-shrink: 0;
   }
 
   .panel-header {
@@ -287,12 +270,141 @@
     padding: $spacing-md;
   }
 
+  // === Multi-row list ===
+
+  .row-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $spacing-sm;
+    padding: $spacing-xs 0;
+  }
+
+  .row-count {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    font-weight: 500;
+  }
+
+  .row-actions {
+    display: flex;
+    gap: $spacing-xs;
+  }
+
+  .action-btn {
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $border-radius;
+    font-size: $font-size-sm;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mock-btn {
+    color: $color-primary;
+    border: 1px solid $color-primary;
+    background: transparent;
+
+    &:hover {
+      background: $color-primary-lighter;
+    }
+  }
+
+  .add-btn {
+    color: $color-primary;
+    border: 1px dashed $color-primary;
+    background: transparent;
+    min-width: 28px;
+
+    &:hover {
+      background: $color-primary-lighter;
+    }
+  }
+
+  .row-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: $color-border-light;
+    border: 1px solid $color-border-light;
+    border-radius: $border-radius;
+    overflow: hidden;
+  }
+
+  .row-item {
+    background: $color-surface;
+  }
+
+  .row-item-header {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    width: 100%;
+    padding: $spacing-sm $spacing-md;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: $font-size-sm;
+    color: $color-text;
+
+    &:hover {
+      background: $color-bg;
+    }
+  }
+
+  .row-toggle {
+    width: 14px;
+    color: $color-text-muted;
+    font-size: $font-size-xs;
+    flex-shrink: 0;
+  }
+
+  .row-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .row-remove {
+    color: $color-danger;
+    font-size: $font-size-lg;
+    opacity: 0.3;
+    padding: 0 $spacing-xs;
+    background: none;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover:not(:disabled) {
+      opacity: 1;
+    }
+
+    &:disabled {
+      opacity: 0.1;
+      cursor: not-allowed;
+    }
+  }
+
+  .row-fields {
+    padding: $spacing-sm $spacing-md $spacing-md;
+    border-top: 1px solid $color-border-light;
+  }
+
+  // === Field groups ===
+
   .field-group {
     background: $color-surface;
     border: 1px solid $color-border-light;
     border-radius: $border-radius;
     margin-bottom: $spacing-md;
     overflow: hidden;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   .field-header {
@@ -312,6 +424,10 @@
     border-radius: 10px;
     font-weight: 600;
     white-space: nowrap;
+
+    &.taxonomy {
+      background: $color-taxonomy;
+    }
   }
 
   .field-name-input {
@@ -350,11 +466,6 @@
     min-height: 60px;
   }
 
-  .wp-input-sm {
-    padding: $spacing-xs $spacing-sm;
-    font-size: $font-size-sm;
-  }
-
   .image-preview {
     margin-top: $spacing-sm;
     max-width: 100%;
@@ -362,123 +473,6 @@
     border-radius: $border-radius;
     border: 1px solid $color-border-light;
     object-fit: cover;
-  }
-
-  .repeater-group {
-    display: flex;
-    flex-direction: column;
-    gap: $spacing-sm;
-  }
-
-  .sub-field-bar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: $spacing-xs;
-    padding: $spacing-xs 0;
-    border-bottom: 1px dashed $color-border-light;
-    margin-bottom: $spacing-xs;
-  }
-
-  .sub-field-label {
-    font-size: $font-size-xs;
-    color: $color-text-secondary;
-    font-weight: 600;
-    margin-right: $spacing-xs;
-  }
-
-  .sub-field-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 2px $spacing-sm;
-    background: $color-primary-light;
-    color: $color-primary;
-    border-radius: 10px;
-    font-size: $font-size-xs;
-    font-weight: 500;
-  }
-
-  .tag-remove {
-    font-size: $font-size-xs;
-    color: $color-primary;
-    opacity: 0.6;
-    line-height: 1;
-    padding: 0 2px;
-
-    &:hover {
-      opacity: 1;
-      color: $color-danger;
-    }
-  }
-
-  .add-sub-select {
-    padding: 2px $spacing-sm;
-    border: 1px dashed $color-primary;
-    border-radius: $border-radius;
-    font-size: $font-size-xs;
-    color: $color-primary;
-    background: transparent;
-    cursor: pointer;
-
-    &:focus {
-      outline: none;
-      border-color: $color-primary;
-    }
-  }
-
-  .repeater-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $spacing-sm;
-    align-items: center;
-    padding: $spacing-sm;
-    border: 1px dashed $color-border;
-    border-radius: $border-radius;
-    background: $color-bg-lighter;
-  }
-
-  .row-index {
-    font-size: $font-size-xs;
-    color: $color-text-muted;
-    font-weight: 600;
-    width: 24px;
-  }
-
-  .sub-field {
-    flex: 1;
-    min-width: 100px;
-  }
-
-  .sub-label {
-    display: block;
-    font-size: $font-size-xs;
-    color: $color-text-secondary;
-    margin-bottom: 2px;
-  }
-
-  .remove-row-btn {
-    color: $color-danger;
-    font-size: $font-size-lg;
-    padding: $spacing-xs;
-    opacity: 0.5;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
-
-  .add-row-btn {
-    align-self: flex-start;
-    padding: $spacing-xs $spacing-md;
-    font-size: $font-size-sm;
-    color: $color-primary;
-    border: 1px dashed $color-primary;
-    border-radius: $border-radius;
-
-    &:hover {
-      background: $color-primary-lighter;
-    }
   }
 
   .empty-state {
@@ -493,11 +487,5 @@
       justify-content: center;
       height: 100%;
     }
-  }
-
-  .empty-hint {
-    font-size: $font-size-xs;
-    color: $color-text-muted;
-    font-style: italic;
   }
 </style>

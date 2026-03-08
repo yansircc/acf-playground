@@ -26,16 +26,25 @@
     }));
   });
 
-  // Sync store → xyflow edges
+  // Sync store → xyflow edges (taxonomy edges get green color)
   $effect(() => {
-    edges = store.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      sourceHandle: e.sourceHandle,
-      target: e.target,
-      animated: true,
-      style: 'stroke: #0073aa; stroke-width: 2px;',
-    }));
+    edges = store.edges.map((e) => {
+      // Find the source field to check if it's taxonomy
+      const sourceEntity = store.entities.find((ent) => ent.id === e.source);
+      const sourceField = sourceEntity?.fields.find((f) => f.id === e.sourceHandle);
+      const isTaxonomy = sourceField?.type.kind === 'ref' && sourceField.type.cardinality === 'taxonomy';
+
+      return {
+        id: e.id,
+        source: e.source,
+        sourceHandle: e.sourceHandle,
+        target: e.target,
+        animated: true,
+        style: isTaxonomy
+          ? 'stroke: #46b450; stroke-width: 2px;'
+          : 'stroke: #0073aa; stroke-width: 2px;',
+      };
+    });
   });
 
   function handleNodeClick(_event: { node: Node }) {
@@ -50,6 +59,21 @@
 
   function handlePaneClick() {
     store.setSelected(null);
+  }
+
+  // Delete key: edges → clear ref target, nodes → remove entity
+  function handleDelete(params: { nodes: Node[]; edges: Edge[] }) {
+    for (const edge of params.edges) {
+      const entity = store.entities.find((e) => e.id === edge.source);
+      if (!entity) continue;
+      const field = entity.fields.find((f) => f.id === edge.sourceHandle);
+      if (field && field.type.kind === 'ref') {
+        store.updateRefTarget(entity.id, field.id, '');
+      }
+    }
+    for (const node of params.nodes) {
+      store.removeEntity(node.id);
+    }
   }
 
   // === Drop handling on the outer container ===
@@ -98,17 +122,41 @@
     const hitNodeId = hitTestNode(position);
 
     if (payload.action === 'new-entity') {
-      const name = prompt('Entity name:', 'New Entity');
+      const name = prompt('实体名称：', '新实体');
       if (name) store.addEntity(name, position);
     } else if (payload.action === 'add-field' && payload.fieldType) {
+      const ft = payload.fieldType as FieldType;
+
+      // Taxonomy macro: requires dropping on existing node
+      if (ft.kind === 'ref' && ft.cardinality === 'taxonomy') {
+        if (hitNodeId) {
+          const taxName = prompt('分类名称：', '分类');
+          if (taxName) {
+            const taxPos = { x: position.x + 300, y: position.y };
+            store.addTaxonomyField(hitNodeId, taxName, taxPos);
+          }
+        } else {
+          const entityName = prompt('先创建实体，再添加分类。\n实体名称：', '新实体');
+          if (entityName) {
+            const entity = store.addEntity(entityName, position);
+            const taxName = prompt('分类名称：', '分类');
+            if (taxName) {
+              const taxPos = { x: position.x + 300, y: position.y };
+              store.addTaxonomyField(entity.id, taxName, taxPos);
+            }
+          }
+        }
+        return;
+      }
+
       if (hitNodeId) {
-        store.addField(hitNodeId, payload.fieldType as FieldType);
+        store.addField(hitNodeId, ft);
         store.setSelected(hitNodeId);
       } else {
-        const name = prompt('Create new entity with this field.\nEntity name:', 'New Entity');
+        const name = prompt('创建新实体并添加此字段。\n实体名称：', '新实体');
         if (name) {
           const entity = store.addEntity(name, position);
-          store.addField(entity.id, payload.fieldType as FieldType);
+          store.addField(entity.id, ft);
         }
       }
     }
@@ -131,7 +179,8 @@
     onnodeclick={handleNodeClick}
     onnodedragstop={handleNodeDragStop}
     onpaneclick={handlePaneClick}
-    deleteKey={null}
+    ondelete={handleDelete}
+    deleteKey={['Backspace', 'Delete']}
     proOptions={{ hideAttribution: true }}
   >
     <Background />

@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { FieldType } from '$lib/types';
-  import { store } from '$lib/store.svelte';
 
   type ToolboxItem = {
     label: string;
@@ -8,19 +7,20 @@
     fieldType: FieldType;
   };
 
-  const atomFields: ToolboxItem[] = [
-    { label: 'Text', icon: 'Aa', fieldType: { kind: 'atom', subtype: 'text' } },
-    { label: 'Textarea', icon: '\u00b6', fieldType: { kind: 'atom', subtype: 'textarea' } },
-    { label: 'Number', icon: '#', fieldType: { kind: 'atom', subtype: 'number' } },
-    { label: 'Email', icon: '@', fieldType: { kind: 'atom', subtype: 'email' } },
-    { label: 'URL', icon: '\u{1f517}', fieldType: { kind: 'atom', subtype: 'url' } },
-    { label: 'Image', icon: '\u{1f5bc}', fieldType: { kind: 'atom', subtype: 'image' } },
+  const basicFields: ToolboxItem[] = [
+    { label: '文本', icon: 'Aa', fieldType: { kind: 'atom', subtype: 'text' } },
+    { label: '多行', icon: '¶', fieldType: { kind: 'atom', subtype: 'textarea' } },
+    { label: '数字', icon: '#', fieldType: { kind: 'atom', subtype: 'number' } },
+    { label: '邮箱', icon: '@', fieldType: { kind: 'atom', subtype: 'email' } },
+    { label: '链接', icon: '🔗', fieldType: { kind: 'atom', subtype: 'url' } },
+    { label: '图片', icon: '🖼', fieldType: { kind: 'atom', subtype: 'image' } },
   ];
 
   const advancedFields: ToolboxItem[] = [
-    { label: 'Repeater', icon: '\u{1f501}', fieldType: { kind: 'repeat', fields: [] } },
-    { label: 'Relationship', icon: '\u21c9', fieldType: { kind: 'ref', target: '', cardinality: 'n' } },
-    { label: 'Post Object', icon: '\u2192', fieldType: { kind: 'ref', target: '', cardinality: '1' } },
+    { label: '重复器', icon: '🔁', fieldType: { kind: 'repeat', fields: [] } },
+    { label: '关联', icon: '⇉', fieldType: { kind: 'ref', target: '', cardinality: 'n' } },
+    { label: '文章对象', icon: '→', fieldType: { kind: 'ref', target: '', cardinality: '1' } },
+    { label: '分类', icon: '🏷', fieldType: { kind: 'ref', target: '', cardinality: 'taxonomy' } },
   ];
 
   function handleDragStart(event: DragEvent, item: ToolboxItem) {
@@ -31,105 +31,90 @@
     );
     event.dataTransfer.effectAllowed = 'copy';
   }
-
-  function handleEntityDragStart(event: DragEvent) {
-    if (!event.dataTransfer) return;
-    event.dataTransfer.setData(
-      'application/acf-field',
-      JSON.stringify({ action: 'new-entity' })
-    );
-    event.dataTransfer.effectAllowed = 'move';
-  }
-
-  function handleAddEntity() {
-    store.addEntity('New Entity');
-  }
 </script>
 
-<div class="toolbox">
-  <div class="toolbox-section">
-    <h3 class="section-title">Entity</h3>
-    <button
-      class="toolbox-item entity-item"
-      draggable="true"
-      ondragstart={handleEntityDragStart}
-      onclick={handleAddEntity}
-    >
-      <span class="item-icon">+</span>
-      <span class="item-label">New Entity</span>
-    </button>
-  </div>
-
-  <div class="toolbox-section">
-    <h3 class="section-title">Basic Fields</h3>
-    {#each atomFields as item}
+<div class="toolbox-bar">
+  <div class="toolbox-group">
+    <span class="group-label">基础字段</span>
+    {#each basicFields as item}
       <div
-        class="toolbox-item"
+        class="badge"
         draggable="true"
         ondragstart={(e) => handleDragStart(e, item)}
         role="button"
         tabindex="0"
       >
-        <span class="item-icon">{item.icon}</span>
-        <span class="item-label">{item.label}</span>
+        <span class="badge-icon">{item.icon}</span>
+        <span class="badge-label">{item.label}</span>
       </div>
     {/each}
   </div>
-
-  <div class="toolbox-section">
-    <h3 class="section-title">Advanced</h3>
+  <div class="toolbox-divider"></div>
+  <div class="toolbox-group">
+    <span class="group-label">高级</span>
     {#each advancedFields as item}
       <div
-        class="toolbox-item"
+        class="badge"
+        class:taxonomy={item.fieldType.kind === 'ref' && 'cardinality' in item.fieldType && item.fieldType.cardinality === 'taxonomy'}
         draggable="true"
         ondragstart={(e) => handleDragStart(e, item)}
         role="button"
         tabindex="0"
       >
-        <span class="item-icon">{item.icon}</span>
-        <span class="item-label">{item.label}</span>
+        <span class="badge-icon">{item.icon}</span>
+        <span class="badge-label">{item.label}</span>
       </div>
     {/each}
   </div>
 </div>
 
 <style lang="scss">
-  .toolbox {
-    width: $toolbox-width;
-    background: $color-surface;
-    border-right: 1px solid $color-border;
-    padding: $spacing-md;
-    overflow-y: auto;
-    flex-shrink: 0;
-  }
-
-  .toolbox-section {
-    margin-bottom: $spacing-lg;
-  }
-
-  .section-title {
-    font-size: $font-size-xs;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: $color-text-secondary;
-    margin-bottom: $spacing-sm;
-    font-weight: 600;
-  }
-
-  .toolbox-item {
+  .toolbox-bar {
     display: flex;
     align-items: center;
     gap: $spacing-sm;
-    padding: $spacing-sm $spacing-md;
+    padding: $spacing-sm $spacing-lg;
+    background: $color-surface;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+
+  .toolbox-group {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    flex-shrink: 0;
+  }
+
+  .toolbox-divider {
+    width: 1px;
+    height: 24px;
+    background: $color-border;
+    flex-shrink: 0;
+  }
+
+  .group-label {
+    font-size: $font-size-xs;
+    color: $color-text-muted;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-right: $spacing-xs;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: $spacing-xs $spacing-sm;
     border: 1px solid $color-border-light;
-    border-radius: $border-radius;
-    margin-bottom: $spacing-xs;
+    border-radius: 16px;
     cursor: grab;
-    transition: all 0.15s;
     user-select: none;
     background: $color-surface;
-    width: 100%;
-    text-align: left;
+    white-space: nowrap;
+    transition: all 0.15s;
+    font-size: $font-size-sm;
 
     &:hover {
       border-color: $color-primary;
@@ -140,27 +125,23 @@
       cursor: grabbing;
     }
 
-    &.entity-item {
-      background: $color-node-header;
-      color: white;
-      border-color: $color-node-header;
-      cursor: pointer;
+    &.taxonomy {
+      border-color: $color-taxonomy;
 
       &:hover {
-        background: $color-node-header-hover;
+        background: rgba($color-taxonomy, 0.1);
+        border-color: $color-taxonomy;
       }
     }
   }
 
-  .item-icon {
-    width: 24px;
-    text-align: center;
-    flex-shrink: 0;
-    font-size: $font-size-base;
+  .badge-icon {
+    font-size: $font-size-sm;
+    line-height: 1;
   }
 
-  .item-label {
-    font-size: $font-size-sm;
+  .badge-label {
+    font-size: $font-size-xs;
     font-weight: 500;
   }
 </style>

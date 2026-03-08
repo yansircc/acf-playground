@@ -1,22 +1,37 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import TopBar from '$lib/components/TopBar.svelte';
   import Canvas from '$lib/components/Canvas.svelte';
   import FieldToolbox from '$lib/components/FieldToolbox.svelte';
   import FormPanel from '$lib/components/FormPanel.svelte';
-  import PreviewPanel from '$lib/components/PreviewPanel.svelte';
+  import { store } from '$lib/store.svelte';
+  import { startBroadcasting } from '$lib/store-sync';
+  import { fetchPendingState } from '$lib/store-import';
+
+  onMount(() => {
+    // 先检查是否有通过 API 注入的 pending state
+    fetchPendingState().then((state) => {
+      if (state) store.hydrate(state);
+    });
+
+    const broadcast = startBroadcasting(store);
+    // 用 $effect 监听 store 变化并广播
+    const stop = $effect.root(() => {
+      $effect(() => {
+        store.serialize(); // 触发依赖追踪
+        broadcast();
+      });
+    });
+    return stop;
+  });
 </script>
 
 <div class="app-layout">
   <TopBar />
+  <FieldToolbox />
   <div class="main-content">
-    <div class="left-panel">
-      <FieldToolbox />
-      <Canvas />
-    </div>
-    <div class="right-panels">
-      <FormPanel />
-      <PreviewPanel />
-    </div>
+    <Canvas />
+    <FormPanel />
   </div>
 </div>
 
@@ -32,17 +47,5 @@
     display: flex;
     flex: 1;
     overflow: hidden;
-  }
-
-  .left-panel {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .right-panels {
-    display: flex;
-    flex-shrink: 0;
-    border-left: 1px solid $color-border;
   }
 </style>

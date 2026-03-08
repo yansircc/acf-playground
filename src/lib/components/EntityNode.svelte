@@ -3,6 +3,7 @@
   import type { NodeProps } from '@xyflow/svelte';
   import type { Entity, FieldType } from '$lib/types';
   import { store } from '$lib/store.svelte';
+  import { tick } from 'svelte';
 
   let { data }: NodeProps = $props();
 
@@ -14,17 +15,43 @@
       case 'atom':
         switch (type.subtype) {
           case 'text': return 'Aa';
-          case 'textarea': return '\u00b6';
+          case 'textarea': return '¶';
           case 'number': return '#';
           case 'email': return '@';
-          case 'url': return '\u{1f517}';
-          case 'image': return '\u{1f5bc}';
+          case 'url': return '🔗';
+          case 'image': return '🖼';
         }
         break;
-      case 'repeat': return '\u{1f501}';
-      case 'ref': return type.cardinality === '1' ? '\u2192' : '\u21c9';
+      case 'repeat': return '🔁';
+      case 'ref':
+        switch (type.cardinality) {
+          case '1': return '→';
+          case 'n': return '⇉';
+          case 'taxonomy': return '🏷';
+        }
     }
     return '?';
+  }
+
+  let editing = $state(false);
+  let editName = $state('');
+
+  let editInput: HTMLInputElement | undefined = $state();
+
+  async function startEditing() {
+    editName = entity.name;
+    editing = true;
+    await tick();
+    editInput?.focus();
+    editInput?.select();
+  }
+
+  function commitEdit() {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== entity.name) {
+      store.renameEntity(entity.id, trimmed);
+    }
+    editing = false;
   }
 
   function removeField(fieldId: string) {
@@ -40,13 +67,23 @@
   role="group"
 >
   <div class="entity-header">
-    <span class="entity-name">{entity.name}</span>
+    {#if editing}
+      <input
+        class="edit-name"
+        bind:this={editInput}
+        bind:value={editName}
+        onblur={commitEdit}
+        onkeydown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editing = false; }}
+      />
+    {:else}
+      <span class="entity-name" ondblclick={startEditing} role="textbox" tabindex="0">{entity.name}</span>
+    {/if}
     <button class="delete-btn" onclick={() => store.removeEntity(entity.id)} title="Delete entity">&times;</button>
   </div>
 
   <div class="entity-fields">
     {#if entity.fields.length === 0}
-      <div class="empty-hint">Drop fields here</div>
+      <div class="empty-hint">拖入字段到此处</div>
     {/if}
     {#each entity.fields as field (field.id)}
       <div class="field-row">
@@ -87,6 +124,18 @@
     color: white;
     font-weight: 600;
     font-size: $font-size-base;
+  }
+
+  .edit-name {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: $border-radius;
+    color: white;
+    font-weight: 600;
+    font-size: $font-size-base;
+    padding: 0 $spacing-xs;
+    width: 100%;
+    outline: none;
   }
 
   .delete-btn {
