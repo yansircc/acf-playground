@@ -5,7 +5,7 @@ export type AtomSubtype = 'text' | 'number' | 'image' | 'url' | 'email' | 'texta
 export type FieldType =
   | { kind: 'atom'; subtype: AtomSubtype }
   | { kind: 'repeat'; fields: Field[] }
-  | { kind: 'ref'; target: string; cardinality: '1' | 'n' };
+  | { kind: 'ref'; target: string; cardinality: '1' | 'n' | 'taxonomy' };
 
 export type Field = {
   id: string;

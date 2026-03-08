@@ -52,11 +52,15 @@ function fieldTypeToACF(field: Field): ACFField {
       if (ft.cardinality === '1') {
         base.type = 'post_object';
         base.return_format = 'object';
+      } else if (ft.cardinality === 'taxonomy') {
+        base.type = 'taxonomy';
+        base.taxonomy = [ft.target ? 'category' : 'category'];
+        base.return_format = 'id';
       } else {
         base.type = 'relationship';
         base.return_format = 'object';
       }
-      if (ft.target) {
+      if (ft.target && ft.cardinality !== 'taxonomy') {
         base.post_type = ['post'];
       }
       break;
