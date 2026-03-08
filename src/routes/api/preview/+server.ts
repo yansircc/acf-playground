@@ -49,7 +49,7 @@ ${DESIGN_TOKENS}
 ## 两个模板的职责
 
 ### listing_html（列表页）
-- 用 <!-- entity-repeat:实体名 --> 包裹，展示**部分关键字段**（通常 2–4 个最重要的字段）
+- 用 <template data-acf-repeat="实体名"> 包裹，展示**部分关键字段**（通常 2–4 个最重要的字段）
 - 每行必须包含一个详情链接：<a href="#" data-detail-index="{{__index__}}">详情</a>
 - 适合表格或卡片列表形式
 - {{__index__}} 是内置占位符，会被替换为当前行号（0, 1, 2...）
@@ -66,21 +66,28 @@ ${DESIGN_TOKENS}
 - Ref(1) 字段：{{字段名}} → 解析为目标记录的标签文本
 - Ref(n) 字段：{{字段名}} → 解析为逗号分隔的标签列表
 
+### ref 字段渲染为链接（重要！）
+- **所有 ref 字段都应该渲染为可点击的跨页链接**，而不是纯文本
+- Ref(1) 简单链接：<a href="#entity-{目标实体名}">{{ref字段名}}</a>
+- Ref(n) 逐条链接（推荐）：用 ref-repeat 迭代，每条加链接：
+  <template data-acf-ref-repeat="ref字段名"><a href="#entity-{目标实体名}" class="..."}>{{目标字段名}}</a> </template>
+- Ref(n) 简单链接（备选）：<a href="#entity-{目标实体名}">{{ref字段名}}</a>（整体一个链接，逗号分隔）
+
 ### ref 穿透（访问引用目标的字段）
 - {{ref字段名.目标字段名}} → 跟随 ref(1) 引用，取目标记录的某个字段值
 - 仅适用于 ref(1)，不适用于 ref(n)
 
 ### 多条记录迭代（仅 listing）
-- 当前实体的全部记录：<!-- entity-repeat:实体名 -->...单条模板...<!-- /entity-repeat:实体名 -->
-- 每个 entity-repeat 块内可用该实体的所有字段占位符
-- {{__index__}} 在 entity-repeat 块内可用，替换为当前行的索引号
+- 当前实体的全部记录：<template data-acf-repeat="实体名">...单条模板...</template>
+- 每个 data-acf-repeat 块内可用该实体的所有字段占位符
+- {{__index__}} 在 data-acf-repeat 块内可用，替换为当前行的索引号
 
 ### ref(n) 作用域迭代（只遍历当前记录引用的那几条）
-- <!-- ref-repeat:ref字段名 -->...<!-- /ref-repeat:ref字段名 -->
+- <template data-acf-ref-repeat="ref字段名">...item...</template>
 - 块内使用目标实体的字段名作为占位符
 
 ### Repeater 子字段
-- <!-- repeat:字段名 -->...{{子字段名}}...<!-- /repeat:字段名 -->
+- <template data-acf-field-repeat="字段名">...{{子字段名}}...</template>
 
 ### 页面跳转
 - <a href="#entity-{目标实体名}">链接文本</a>
@@ -89,9 +96,9 @@ ${DESIGN_TOKENS}
 - ❌ {{@index}}、{{@count}} 等内置变量 — 不存在（用 {{__index__}} 代替行号）
 - ❌ count()、avg()、sum() 等聚合函数 — 不存在
 - ❌ 同一实体名的 entity-repeat 在一个页面出现多次 — 会导致数据重复
-- ❌ 自创占位符语法（如 \${xxx}、{%xxx%}）— 只有 {{}} 和 <!-- --> 注释语法有效
+- ❌ 自创占位符语法（如 \${xxx}、{%xxx%}）— 只有 {{}} 和 <template data-acf-*> 语法有效
 - ❌ 统计数字（如"共 N 条"） — 用 "—" 占位或直接省略
-- ❌ detail_html 中使用 entity-repeat — detail 是单条记录模板，不需要迭代`;
+- ❌ detail_html 中使用 data-acf-repeat — detail 是单条记录模板，不需要迭代`;
 
 const RENDER_TOOL = {
   name: 'render_page',
@@ -101,7 +108,7 @@ const RENDER_TOOL = {
     properties: {
       listing_html: {
         type: 'string' as const,
-        description: '列表页 HTML：用 <!-- entity-repeat:实体名 --> 包裹，展示部分关键字段，每行含 <a href="#" data-detail-index="{{__index__}}">详情</a>',
+        description: '列表页 HTML：用 <template data-acf-repeat="实体名"> 包裹，展示部分关键字段，每行含 <a href="#" data-detail-index="{{__index__}}">详情</a>',
       },
       detail_html: {
         type: 'string' as const,
@@ -136,6 +143,7 @@ function buildFieldExamples(entityName: string, schema: { entities: EntitySchema
     if (f.type === 'ref' && f.target) {
       const card = f.cardinality === '1' ? 'ref(1)' : f.cardinality === 'n' ? 'ref(n)' : `ref(${f.cardinality})`;
       refFields.push(`- {{${f.name}}} — ${card}，指向「${f.target}」`);
+      refFields.push(`  - 链接写法: <a href="#entity-${f.target}">{{${f.name}}}</a>`);
       // ref(1) dot examples
       if (f.cardinality === '1') {
         const targetEntity = schema.entities.find((e) => e.name === f.target);
@@ -146,9 +154,30 @@ function buildFieldExamples(entityName: string, schema: { entities: EntitySchema
           }
         }
       }
+      // ref(n) ref-repeat example
+      if (f.cardinality === 'n' || f.cardinality === 'taxonomy') {
+        const targetEntity = schema.entities.find((e) => e.name === f.target);
+        if (targetEntity) {
+          const labelField = targetEntity.fields.find((tf) => tf.type !== 'ref' && tf.type !== 'repeat');
+          const labelPlaceholder = labelField ? `{{${labelField.name}}}` : `{{${f.name}}}`;
+          refFields.push(`  - 逐条迭代: <template data-acf-ref-repeat="${f.name}"><a href="#entity-${f.target}">${labelPlaceholder}</a> </template>`);
+        }
+      }
     } else if (f.type === 'repeat' && f.subFields) {
-      const subs = f.subFields.map((sf) => `{{${sf.name}}}`).join(', ');
-      repeatFields.push(`- <!-- repeat:${f.name} -->${subs}<!-- /repeat:${f.name} -->`);
+      const subParts: string[] = [];
+      for (const sf of f.subFields) {
+        subParts.push(`{{${sf.name}}}`);
+        if (sf.type === 'ref' && sf.cardinality === '1' && sf.target) {
+          const targetEntity = schema.entities.find((e) => e.name === sf.target);
+          if (targetEntity) {
+            const targetAtoms = targetEntity.fields.filter((tf) => tf.type !== 'ref' && tf.type !== 'repeat');
+            for (const ta of targetAtoms.slice(0, 2)) {
+              subParts.push(`穿透: {{${sf.name}.${ta.name}}}`);
+            }
+          }
+        }
+      }
+      repeatFields.push(`- <template data-acf-field-repeat="${f.name}">${subParts.join(', ')}</template>`);
     } else {
       atomFields.push(`- {{${f.name}}} — ${f.type ?? f.subtype ?? 'text'}`);
     }
@@ -248,7 +277,9 @@ export const POST: RequestHandler = async ({ request }) => {
     });
   }
 
-  return new Response(JSON.stringify({ pages }), {
+  const body: { pages: typeof pages; errors?: string[] } = { pages };
+  if (errors.length > 0) body.errors = errors;
+  return new Response(JSON.stringify(body), {
     headers: { 'Content-Type': 'application/json' },
   });
 };
