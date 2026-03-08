@@ -14,9 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import fixtureJson from '../static/fixtures/school-demo.json';
 
 interface FieldType {
   kind: 'atom' | 'repeat' | 'ref';
@@ -45,11 +43,7 @@ interface StoreState {
   selected: string | null;
 }
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const fixture: StoreState = JSON.parse(
-  readFileSync(join(__dirname, '../static/fixtures/school-demo.json'), 'utf-8')
-);
+const fixture = fixtureJson as StoreState;
 
 describe('school-demo fixture ref(1) 数据契约', () => {
   // Collect all ref(1) field + data pairs
