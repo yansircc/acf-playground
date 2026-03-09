@@ -46,6 +46,17 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function toEmbedUrl(url) {
+  if (!url) return null;
+  try {
+    var m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (m) return 'https://www.youtube.com/embed/' + m[1];
+    m = url.match(/vimeo\.com\/(\d+)/);
+    if (m) return 'https://player.vimeo.com/video/' + m[1];
+  } catch(e) {}
+  return null;
+}
+
 function getEntityByName(name) {
   return window.__schema.find(function(e) { return e.name === name; });
 }
@@ -179,6 +190,9 @@ function fillRecord(template, entitySchema, row, rowIndex) {
   // 3. atom + ref 字段（字符串替换，不需要 DOM）
   entitySchema.fields.forEach(function(field) {
     if (field.kind === 'atom') {
+      // wysiwyg: triple-brace → raw HTML (unescaped)
+      filled = filled.split('{{{' + field.name + '}}}').join(row[field.id] != null ? String(row[field.id]) : '');
+      // normal: double-brace → escaped
       filled = filled.split('{{' + field.name + '}}').join(escapeHtml(row[field.id]));
     } else if (field.kind === 'ref') {
       filled = filled.split('{{' + field.name + '}}').join(escapeHtml(resolveRef(field, row[field.id])));
@@ -246,6 +260,22 @@ function checkResidualPlaceholders(html, context) {
   reportWarning('[' + context + '] unresolved placeholders: ' + unique.join(', '));
 }
 
+// === oEmbed 后处理 ===
+
+function processOembedElements(container) {
+  if (!container) return;
+  container.querySelectorAll('[data-oembed]').forEach(function(el) {
+    var url = el.getAttribute('data-oembed');
+    var embedUrl = toEmbedUrl(url);
+    var iframe = el.querySelector('iframe');
+    if (iframe && embedUrl) {
+      iframe.src = embedUrl;
+    } else if (!iframe && embedUrl) {
+      // listing card: just show play icon, no iframe
+    }
+  });
+}
+
 // === 渲染入口 ===
 
 function renderAllListings() {
@@ -258,6 +288,7 @@ function renderAllListings() {
         var filled = fillListingTemplate(entity.name);
         checkResidualPlaceholders(filled, entity.name);
         lv.innerHTML = filled;
+        processOembedElements(lv);
       }
     } catch (err) {
       reportError('renderAllListings[' + entity.name + ']', err);
@@ -282,11 +313,13 @@ function renderCurrentView() {
         var detailHtml = fillDetailTemplate(en, parseInt(ri, 10));
         checkResidualPlaceholders(detailHtml, en + ' detail');
         dv.innerHTML = detailHtml;
+        processOembedElements(dv);
       }
     } else if (lv) {
       var listingHtml = fillListingTemplate(entityName);
       checkResidualPlaceholders(listingHtml, entityName);
       lv.innerHTML = listingHtml;
+      processOembedElements(lv);
     }
   } catch (err) {
     reportError('renderCurrentView', err);
@@ -322,6 +355,7 @@ function navigateTo(id) {
     var detail = t.querySelector('.detail-view');
     if (listing) {
       listing.innerHTML = fillListingTemplate(entityName);
+      processOembedElements(listing);
       listing.style.display = 'block';
     }
     if (detail) detail.style.display = 'none';
@@ -341,6 +375,7 @@ function showDetail(entityName, rowIndex) {
   detail.dataset.entityName = entityName;
   detail.dataset.rowIndex = String(rowIndex);
   detail.innerHTML = fillDetailTemplate(entityName, rowIndex);
+  processOembedElements(detail);
   listing.style.display = 'none';
   detail.style.display = 'block';
   window.scrollTo(0, 0);
@@ -353,6 +388,7 @@ function showListing(entityName) {
   var detail = page.querySelector('.detail-view');
   if (!listing || !detail) return;
   listing.innerHTML = fillListingTemplate(entityName);
+  processOembedElements(listing);
   listing.style.display = 'block';
   detail.style.display = 'none';
   window.scrollTo(0, 0);

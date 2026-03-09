@@ -8,13 +8,12 @@
     buildClientData,
     escapeAttr,
   } from '$lib/preview-schema';
+  import { generateAllTemplates } from '$lib/template-generator';
 
   let html = $state('');
   let template = $state('');
-  let status: 'empty' | 'loading' | 'done' | 'error' = $state('empty');
-  let errorMsg = $state('');
+  let status: 'empty' | 'done' = $state('empty');
   let iframeWarnings: string[] = $state([]);
-  let abortController: AbortController | null = null;
   let lastSchemaKey = '';
 
   // === iframe 通信 ===
@@ -143,7 +142,7 @@
 </html>`;
   }
 
-  // === 主 effect：schema 变 → 请求 LLM；数据变 → postMessage ===
+  // === 主 effect：schema 变 → 同步生成模板；数据变 → postMessage ===
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -164,62 +163,20 @@
     if (currentKey !== lastSchemaKey) {
       lastSchemaKey = currentKey;
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fetchTemplate(), 800);
+      debounceTimer = setTimeout(() => {
+        iframeWarnings = [];
+        const result = generateAllTemplates(projectSchema(store.entities));
+        const entityContents = parseEntityContents(result);
+        iframeReady = false;
+        template = buildShell(entityContents);
+        html = template;
+        status = 'done';
+      }, 100);
     } else if (template) {
       // schema 没变，数据变了 → postMessage 给 iframe
       sendDataUpdate();
     }
   });
-
-  async function fetchTemplate() {
-    if (abortController) abortController.abort();
-    abortController = new AbortController();
-
-    status = 'loading';
-    errorMsg = '';
-    iframeWarnings = [];
-
-    try {
-      const res = await fetch('/api/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectSchema(store.entities)),
-        signal: abortController.signal,
-      });
-
-      if (!res.ok) {
-        status = 'error';
-        try {
-          const err = await res.json();
-          errorMsg = err.error ?? `HTTP ${res.status}`;
-        } catch {
-          errorMsg = `HTTP ${res.status}: ${await res.text()}`;
-        }
-        return;
-      }
-
-      const raw = await res.json();
-      const entityContents = parseEntityContents(raw);
-      if (raw.errors?.length) {
-        iframeWarnings = raw.errors.map((e: string) => 'LLM error: ' + e);
-      }
-
-      if (Object.keys(entityContents).length === 0) {
-        status = 'error';
-        errorMsg = 'LLM 未返回任何页面内容，请检查 API 配置';
-        return;
-      }
-
-      iframeReady = false;
-      template = buildShell(entityContents);
-      html = template;
-      status = 'done';
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      status = 'error';
-      errorMsg = String(err);
-    }
-  }
 </script>
 
 <div class="preview-panel">
@@ -227,20 +184,7 @@
     <div class="empty-state">
       <p>添加实体后自动生成预览</p>
     </div>
-  {:else if status === 'error'}
-    <div class="error-state">
-      <p>预览生成失败</p>
-      <p class="error-detail">{errorMsg}</p>
-    </div>
-  {:else if status === 'loading' && !html}
-    <div class="loading-state">
-      <div class="pulse"></div>
-      <p>AI 正在生成模板...</p>
-    </div>
   {:else}
-    {#if status === 'loading'}
-      <div class="loading-bar"></div>
-    {/if}
     {#if iframeWarnings.length > 0}
       <div class="warning-bar">
         {#each iframeWarnings as w}
@@ -248,7 +192,7 @@
         {/each}
       </div>
     {/if}
-    <iframe bind:this={iframeEl} onload={onIframeLoad} srcdoc={html} title="LLM 预览"></iframe>
+    <iframe bind:this={iframeEl} onload={onIframeLoad} srcdoc={html} title="预览"></iframe>
   {/if}
 </div>
 
@@ -270,23 +214,6 @@
     flex: 1;
   }
 
-  .loading-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: linear-gradient(90deg, $color-primary, $color-accent, $color-primary);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-    z-index: 1;
-  }
-
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
   .warning-bar {
     background: #FFF3CD;
     border-bottom: 2px solid #FFDE00;
@@ -306,9 +233,7 @@
     }
   }
 
-  .empty-state,
-  .loading-state,
-  .error-state {
+  .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -317,35 +242,5 @@
     color: $color-text-muted;
     font-style: italic;
     gap: $spacing-md;
-  }
-
-  .error-state {
-    color: #d63638;
-  }
-
-  .error-detail {
-    font-size: $font-size-xs;
-    max-width: 300px;
-    text-align: center;
-    word-break: break-all;
-  }
-
-  .pulse {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: $color-primary;
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(0.8);
-      opacity: 0.5;
-    }
-    50% {
-      transform: scale(1.2);
-      opacity: 1;
-    }
   }
 </style>
