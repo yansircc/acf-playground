@@ -158,12 +158,9 @@ export function importACF(items: ACFItem[]): StoreState {
     const slug = location?.[0]?.[0]?.value || '';
     const groupId = extractId(fg.key as string);
 
-    // Determine entity name: prefer post_type title, else field group title, else slug
-    let entityName = fg.title as string;
+    // Determine entity name: prefer post_type title, else use slug directly
     const ptInfo = postTypeMap.get(slug);
-    if (ptInfo) {
-      entityName = ptInfo.title;
-    }
+    const entityName = ptInfo ? ptInfo.title : slug || (fg.title as string);
 
     // Check if we already created an entity for this slug (multiple field groups per entity)
     if (!slugToEntityId.has(slug)) {
