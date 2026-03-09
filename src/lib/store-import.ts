@@ -1,4 +1,5 @@
 import type { StoreState } from './types';
+import { isACFFormat, importACF } from './acf-import';
 
 export function validateStoreState(raw: unknown): StoreState {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid JSON');
@@ -22,6 +23,12 @@ export function validateStoreState(raw: unknown): StoreState {
 export async function readStoreFile(file: File): Promise<StoreState> {
   const text = await file.text();
   const raw = JSON.parse(text);
+
+  // Auto-detect ACF format vs Store format
+  if (isACFFormat(raw)) {
+    return importACF(raw);
+  }
+
   return validateStoreState(raw);
 }
 

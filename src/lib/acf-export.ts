@@ -23,13 +23,18 @@ type ACFFieldGroup = {
 type ACFTaxonomy = Record<string, unknown>;
 type ACFPostType = Record<string, unknown>;
 
-// Generate a stable random-looking suffix from an id
-function shortHash(id: string): string {
-  return id.replace(/-/g, '').slice(0, 10);
+// Use the entity/field ID directly (ACF uses 13-char hex keys)
+function idToKey(id: string): string {
+  return id.replace(/-/g, '');
 }
 
 function toSnake(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '_').replace(/^_|_$/g, '');
+}
+
+// Get the slug for an entity: use preserved slug if available, else derive from name
+function entitySlug(entity: Entity): string {
+  return entity.slug || toSnake(entity.name);
 }
 
 // Convert string[] choices to ACF { value: label } object
@@ -44,9 +49,9 @@ function choicesObj(choices?: string[]): Record<string, string> {
 
 // === Field conversion ===
 
-function fieldToACF(field: Field, parentRepeaterKey?: string): ACFField {
+function fieldToACF(field: Field, entities: Entity[], parentRepeaterKey?: string): ACFField {
   const ft = field.type;
-  const key = `field_${shortHash(field.id)}`;
+  const key = `field_${idToKey(field.id)}`;
   const name = toSnake(field.name);
 
   const base: ACFField = {
@@ -55,33 +60,10 @@ function fieldToACF(field: Field, parentRepeaterKey?: string): ACFField {
     name,
     'aria-label': '',
     type: '',
-    instructions: null,
+    instructions: '',
     required: 0,
     conditional_logic: 0,
     wrapper: { width: '', class: '', id: '' },
-    default_value: null,
-    placeholder: null,
-    choices: null,
-    min: null,
-    max: null,
-    step: null,
-    prepend: null,
-    append: null,
-    maxlength: null,
-    return_format: null,
-    preview_size: null,
-    library: null,
-    mime_types: null,
-    post_type: null,
-    filters: null,
-    taxonomy_field: null,
-    field_type: null,
-    layout: null,
-    button_label: null,
-    collapsed: null,
-    pagination: null,
-    rows_per_page: null,
-    sub_fields: null,
   };
 
   if (parentRepeaterKey) {
@@ -251,19 +233,21 @@ function fieldToACF(field: Field, parentRepeaterKey?: string): ACFField {
       base.button_label = '';
       base.collapsed = '';
       base.rows_per_page = 20;
-      base.sub_fields = ft.fields.map((f) => fieldToACF(f, key));
+      base.sub_fields = ft.fields.map((f) => fieldToACF(f, entities, key));
       break;
 
-    case 'ref':
+    case 'ref': {
+      // Look up the target entity's slug
+      const targetEntity = entities.find((e) => e.id === ft.target);
+      const targetSlug = targetEntity ? entitySlug(targetEntity) : 'post';
+
       if (ft.cardinality === '1') {
         base.type = 'post_object';
         base.return_format = 'object';
-        if (ft.target) {
-          base.post_type = ['post'];
-        }
+        base.post_type = [targetSlug];
       } else if (ft.cardinality === 'taxonomy') {
         base.type = 'taxonomy';
-        base.taxonomy = ft.target ? [toSnake(ft.target)] : ['category'];
+        base.taxonomy = targetEntity ? entitySlug(targetEntity) : 'category';
         base.return_format = 'id';
         base.field_type = 'checkbox';
       } else {
@@ -271,11 +255,10 @@ function fieldToACF(field: Field, parentRepeaterKey?: string): ACFField {
         base.return_format = 'object';
         base.min = 0;
         base.max = 0;
-        if (ft.target) {
-          base.post_type = ['post'];
-        }
+        base.post_type = [targetSlug];
       }
       break;
+    }
   }
 
   return base;
@@ -284,10 +267,10 @@ function fieldToACF(field: Field, parentRepeaterKey?: string): ACFField {
 // === Taxonomy entity → ACF taxonomy definition ===
 
 function taxonomyToACF(entity: Entity, objectTypes: string[]): ACFTaxonomy {
-  const slug = toSnake(entity.name);
+  const slug = entitySlug(entity);
   const name = entity.name;
   return {
-    key: `taxonomy_${slug}`,
+    key: `taxonomy_${idToKey(entity.id)}`,
     title: name,
     menu_order: 0,
     active: true,
@@ -353,10 +336,10 @@ function taxonomyToACF(entity: Entity, objectTypes: string[]): ACFTaxonomy {
 // === Normal entity → ACF post type definition ===
 
 function postTypeToACF(entity: Entity): ACFPostType {
-  const slug = toSnake(entity.name);
+  const slug = entitySlug(entity);
   const name = entity.name;
   return {
-    key: `post_type_${slug}`,
+    key: `post_type_${entity.postTypeKey || idToKey(entity.id)}`,
     title: name,
     menu_order: 0,
     active: true,
@@ -419,6 +402,9 @@ function postTypeToACF(entity: Entity): ACFPostType {
 
 // === Main export ===
 
+// Built-in WordPress post types that don't need post_type_ definitions
+const WP_BUILTIN_TYPES = new Set(['post', 'page', 'attachment', 'revision', 'nav_menu_item']);
+
 function isTaxonomyEntity(entity: Entity): boolean {
   return entity.fields.some(
     (f) => f.type.kind === 'ref' && f.type.target === entity.id
@@ -434,7 +420,7 @@ export function exportToACF(entities: Entity[]): unknown[] {
 
   // For each normal entity: field group + post type
   for (const entity of normalEntities) {
-    const slug = toSnake(entity.name);
+    const slug = entitySlug(entity);
 
     // Filter out taxonomy ref fields from the field group (they become taxonomy associations)
     const nonTaxFields = entity.fields.filter(
@@ -443,12 +429,12 @@ export function exportToACF(entities: Entity[]): unknown[] {
 
     if (nonTaxFields.length > 0) {
       const fieldGroup: ACFFieldGroup = {
-        key: `group_${shortHash(entity.id)}`,
+        key: `group_${idToKey(entity.id)}`,
         title: entity.name,
-        fields: nonTaxFields.map((f) => fieldToACF(f)),
+        fields: nonTaxFields.map((f) => fieldToACF(f, entities)),
         location: [[{ param: 'post_type', operator: '==', value: slug }]],
         menu_order: 0,
-        position: 'acf_after_title',
+        position: 'normal',
         style: 'default',
         label_placement: 'top',
         instruction_placement: 'label',
@@ -470,14 +456,17 @@ export function exportToACF(entities: Entity[]): unknown[] {
           (f) => f.type.kind === 'ref' && f.type.cardinality === 'taxonomy' && f.type.target === taxEntity.id
         )
       )
-      .map((e) => toSnake(e.name));
+      .map((e) => entitySlug(e));
 
     result.push(taxonomyToACF(taxEntity, objectTypes.length > 0 ? objectTypes : ['post']));
   }
 
-  // Post type definitions for normal entities
+  // Post type definitions for normal entities (skip built-in WP types)
   for (const entity of normalEntities) {
-    result.push(postTypeToACF(entity));
+    const slug = entitySlug(entity);
+    if (!WP_BUILTIN_TYPES.has(slug)) {
+      result.push(postTypeToACF(entity));
+    }
   }
 
   return result;

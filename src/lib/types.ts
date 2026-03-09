@@ -28,6 +28,8 @@ export type Entity = {
   id: string;
   name: string;
   fields: Field[];
+  slug?: string; // preserved from ACF import for round-trip fidelity
+  postTypeKey?: string; // original post_type_* key from ACF import
 };
 
 export type Position = { x: number; y: number };
