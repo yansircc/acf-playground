@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SvelteFlow, Background, Controls } from '@xyflow/svelte';
-  import type { Node, Edge, NodeTypes, Viewport } from '@xyflow/svelte';
+  import type { Node, Edge, NodeTypes, Viewport, EdgeMarkerType, Connection } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
   import EntityNode from './EntityNode.svelte';
   import { store } from '$lib/store.svelte';
@@ -10,7 +10,7 @@
 
   let nodes: Node[] = $state.raw([]);
   let edges: Edge[] = $state.raw([]);
-  let viewport: Viewport = $state({ x: 0, y: 0, zoom: 1 });
+  let viewport: Viewport = $state({ x: 0, y: 0, zoom: 0.75 });
   let containerEl: HTMLDivElement | undefined = $state();
 
   // Sync store → xyflow nodes
@@ -26,26 +26,86 @@
     }));
   });
 
-  // Sync store → xyflow edges (taxonomy edges get green color)
+  // Sync store → xyflow edges
+  // 投射层：数据忠实（store.edges 不变），视觉优化（双向合并为字段对字段单线双箭头）
   $effect(() => {
-    edges = store.edges.map((e) => {
-      // Find the source field to check if it's taxonomy
+    const storeEdges = store.edges;
+
+    // 检测双向配对：key = "min:max" of (source, target)，同时记录配对的两条边
+    const pairKey = (a: string, b: string) => a < b ? `${a}:${b}` : `${b}:${a}`;
+    const pairEdges = new Map<string, typeof storeEdges>();
+    for (const e of storeEdges) {
+      if (e.source === e.target) continue; // 自引用不算双向
+      const k = pairKey(e.source, e.target);
+      const arr = pairEdges.get(k) ?? [];
+      arr.push(e);
+      pairEdges.set(k, arr);
+    }
+
+    const rendered = new Set<string>(); // 已渲染的双向配对 key
+    const result: Edge[] = [];
+
+    for (const e of storeEdges) {
       const sourceEntity = store.entities.find((ent) => ent.id === e.source);
       const sourceField = sourceEntity?.fields.find((f) => f.id === e.sourceHandle);
       const isTaxonomy = sourceField?.type.kind === 'ref' && sourceField.type.cardinality === 'taxonomy';
+      const color = isTaxonomy ? '#46b450' : '#0073aa';
 
-      return {
-        id: e.id,
-        source: e.source,
-        sourceHandle: e.sourceHandle,
-        target: e.target,
-        animated: true,
-        style: isTaxonomy
-          ? 'stroke: #46b450; stroke-width: 2px;'
-          : 'stroke: #0073aa; stroke-width: 2px;',
-      };
-    });
+      const k = e.source !== e.target ? pairKey(e.source, e.target) : '';
+      const pair = k ? pairEdges.get(k) : undefined;
+      const isBidirectional = pair && pair.length >= 2;
+
+      if (isBidirectional) {
+        if (rendered.has(k)) continue;
+        rendered.add(k);
+
+        // 找到反向边，用其 sourceHandle 作为 targetHandle（加 -target 后缀）
+        const reverse = pair.find((r) => r.source === e.target && r.target === e.source);
+        const marker: EdgeMarkerType = { type: 'arrowclosed', color };
+        result.push({
+          id: e.id,
+          source: e.source,
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          targetHandle: reverse ? `${reverse.sourceHandle}-target` : undefined,
+          animated: true,
+          markerStart: marker,
+          markerEnd: marker,
+          style: `stroke: ${color}; stroke-width: 2px;`,
+          label: '⇄',
+        });
+      } else {
+        // 单向：连到实体头部（不指定 targetHandle，走默认 header handle）
+        result.push({
+          id: e.id,
+          source: e.source,
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          animated: true,
+          markerEnd: { type: 'arrowclosed', color },
+          style: `stroke: ${color}; stroke-width: 2px;`,
+        });
+      }
+    }
+
+    edges = result;
   });
+
+  // 画布连线：从 handle 拖到 handle 时自动设置 ref target
+  function handleConnect(conn: Connection) {
+    const { source, sourceHandle, target, targetHandle } = conn;
+    if (!source || !sourceHandle || !target) return;
+
+    // 单向：右点 → 实体头部左点（targetHandle === 'header'）
+    // 双向：右点 → 对方 ref 字段右点（targetHandle === '{fieldId}-target'）
+    store.updateRefTarget(source, sourceHandle, target);
+
+    if (targetHandle && targetHandle.endsWith('-target')) {
+      // 双向：自动填充反向
+      const reverseFieldId = targetHandle.replace(/-target$/, '');
+      store.updateRefTarget(target, reverseFieldId, source);
+    }
+  }
 
   function handleNodeClick(_event: { node: Node }) {
     store.setSelected(_event.node.id);
@@ -62,17 +122,36 @@
   }
 
   // Delete key: edges → clear ref target, nodes → remove entity
+  // 双向合并的 edge 删除时，需要清除双方的 ref target
   function handleDelete(params: { nodes: Node[]; edges: Edge[] }) {
     for (const edge of params.edges) {
+      // 清除 source→target 方向
       const entity = store.entities.find((e) => e.id === edge.source);
-      if (!entity) continue;
-      const field = entity.fields.find((f) => f.id === edge.sourceHandle);
-      if (field && field.type.kind === 'ref') {
-        store.updateRefTarget(entity.id, field.id, '');
+      if (entity) {
+        const field = entity.fields.find((f) => f.id === edge.sourceHandle);
+        if (field && field.type.kind === 'ref') {
+          store.updateRefTarget(entity.id, field.id, '');
+        }
+      }
+      // 清除反向 target→source（如果存在双向 ref）
+      const reverseEntity = store.entities.find((e) => e.id === edge.target);
+      if (reverseEntity) {
+        for (const f of reverseEntity.fields) {
+          if (f.type.kind === 'ref' && f.type.target === edge.source) {
+            store.updateRefTarget(reverseEntity.id, f.id, '');
+          }
+        }
       }
     }
-    for (const node of params.nodes) {
-      store.removeEntity(node.id);
+    if (params.nodes.length > 0) {
+      const names = params.nodes.map((n) => {
+        const e = store.entities.find((ent) => ent.id === n.id);
+        return e ? `"${e.name}"` : n.id;
+      }).join(', ');
+      if (!confirm(`确定删除实体 ${names} 及其所有数据吗？`)) return;
+      for (const node of params.nodes) {
+        store.removeEntity(node.id);
+      }
     }
   }
 
@@ -172,13 +251,15 @@
 >
   <SvelteFlow
     bind:nodes
-    bind:edges
+    {edges}
     bind:viewport
     {nodeTypes}
     fitView
+    fitViewOptions={{ maxZoom: 0.75 }}
     onnodeclick={handleNodeClick}
     onnodedragstop={handleNodeDragStop}
     onpaneclick={handlePaneClick}
+    onconnect={handleConnect}
     ondelete={handleDelete}
     deleteKey={['Backspace', 'Delete']}
     proOptions={{ hideAttribution: true }}

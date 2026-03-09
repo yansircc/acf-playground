@@ -117,7 +117,7 @@
           {:else if field.type.kind === 'ref' && field.type.target === entity.id}
             <select
               class="wp-input wp-input-sm"
-              value={(row[field.id] ?? '') as string}
+              value={String(row[field.id] ?? '')}
               onchange={(e) => {
                 const val = (e.target as HTMLSelectElement).value;
                 store.updateFieldData(entity.id, field.id, val === '' ? '' : Number(val), ri);

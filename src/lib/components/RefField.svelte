@@ -11,27 +11,12 @@
   }
 
   let { field, entity, rowIndex, value, onchange }: Props = $props();
-
-  const otherEntities = $derived(
-    store.entities.filter((e) => e.id !== entity.id)
-  );
 </script>
 
 {#if field.type.kind === 'ref'}
   {#if field.type.target === ''}
-    <!-- Schema config: pick target entity -->
-    <select
-      class="wp-input"
-      value={field.type.target}
-      onchange={(e) => {
-        store.updateRefTarget(entity.id, field.id, (e.target as HTMLSelectElement).value);
-      }}
-    >
-      <option value="">-- 选择实体 --</option>
-      {#each otherEntities as other}
-        <option value={other.id}>{other.name}</option>
-      {/each}
-    </select>
+    <!-- target 未设置：提示用户在画布上连线 -->
+    <div class="ref-hint">在画布上从此字段连线到目标实体</div>
   {:else if field.type.cardinality === '1' || field.type.cardinality === 'taxonomy'}
     <!-- Ref(1) / taxonomy: dropdown to pick a record -->
     {@const refOptions = store.getRefOptions(field.type.target)}
@@ -125,5 +110,15 @@
     font-style: italic;
     padding: $spacing-sm;
     text-align: center;
+  }
+
+  .ref-hint {
+    font-size: $font-size-sm;
+    color: $color-text-muted;
+    font-style: italic;
+    padding: $spacing-sm $spacing-md;
+    text-align: center;
+    border: 1px dashed $color-border;
+    border-radius: $border-radius;
   }
 </style>

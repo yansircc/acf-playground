@@ -42,20 +42,50 @@ function generateAtomValue(
       if (lowerName.includes('人') || lowerName.includes('联系') || lowerName.includes('contact')) return pick(NAMES);
       return `${entityName} #${n}`;
     }
+    case 'password':
+      return '••••••';
     case 'number': {
       if (lowerName.includes('价格') || lowerName.includes('price') || lowerName.includes('金额') || lowerName.includes('amount')) {
         return randPrice();
       }
       return String(randInt(10, 9999));
     }
+    case 'range':
+      return String(randInt(0, 100));
     case 'email':
       return `user${n}@example.com`;
     case 'url':
+    case 'oembed':
+    case 'page_link':
+    case 'link':
       return `https://example.com/${entityName.toLowerCase().replace(/\s+/g, '-')}/${n}`;
     case 'image':
+    case 'file':
       return `https://picsum.photos/seed/${Math.random().toString(36).slice(2, 8)}/400/300`;
+    case 'gallery':
+      return [1, 2, 3].map(() => `https://picsum.photos/seed/${Math.random().toString(36).slice(2, 8)}/400/300`).join('\n');
     case 'textarea':
+    case 'wysiwyg':
       return `${entityName}的${fieldName}：${pick(DESCRIPTIONS)}`;
+    case 'select':
+    case 'radio':
+      return '';
+    case 'checkbox':
+      return [];
+    case 'true_false':
+      return Math.random() > 0.5;
+    case 'date_picker':
+      return `2026-${String(randInt(1, 12)).padStart(2, '0')}-${String(randInt(1, 28)).padStart(2, '0')}`;
+    case 'date_time_picker':
+      return `2026-${String(randInt(1, 12)).padStart(2, '0')}-${String(randInt(1, 28)).padStart(2, '0')}T${String(randInt(8, 18)).padStart(2, '0')}:${String(randInt(0, 59)).padStart(2, '0')}`;
+    case 'time_picker':
+      return `${String(randInt(8, 18)).padStart(2, '0')}:${String(randInt(0, 59)).padStart(2, '0')}`;
+    case 'color_picker':
+      return `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')}`;
+    case 'google_map':
+      return pick(CITIES);
+    case 'user':
+      return pick(NAMES);
     default:
       return '';
   }

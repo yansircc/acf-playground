@@ -6,6 +6,8 @@
   import RefField from './RefField.svelte';
   import RepeaterField from './RepeaterField.svelte';
 
+  let { width = 340 }: { width?: number } = $props();
+
   const entity: Entity | undefined = $derived(store.currentEntity);
   const data: Record<string, unknown>[] = $derived(store.currentData);
 
@@ -83,9 +85,26 @@
           case 'text': return '文本';
           case 'textarea': return '多行文本';
           case 'number': return '数字';
+          case 'range': return '范围';
           case 'email': return '邮箱';
           case 'url': return '链接';
+          case 'password': return '密码';
           case 'image': return '图片';
+          case 'file': return '文件';
+          case 'wysiwyg': return '编辑器';
+          case 'oembed': return 'oEmbed';
+          case 'gallery': return '图库';
+          case 'select': return '选择';
+          case 'checkbox': return '复选';
+          case 'radio': return '单选';
+          case 'true_false': return '是/否';
+          case 'date_picker': return '日期';
+          case 'date_time_picker': return '日期时间';
+          case 'time_picker': return '时间';
+          case 'color_picker': return '颜色';
+          case 'page_link': return '页面链接';
+          case 'google_map': return '地图';
+          case 'user': return '用户';
         }
         return type.subtype;
       case 'repeat': return '重复器';
@@ -102,16 +121,55 @@
     if (!entity) return false;
     return store.isSelfRefEntity(entity.id);
   }
+
+  function addChoice(field: import('$lib/types').Field) {
+    if (field.type.kind !== 'atom' || !('choices' in field.type)) return;
+    const choices = field.type.choices ?? [];
+    const n = choices.length + 1;
+    field.type.choices = [...choices, `选项 ${n}`];
+  }
+
+  function removeChoice(field: import('$lib/types').Field, index: number) {
+    if (field.type.kind !== 'atom' || !field.type.choices) return;
+    field.type.choices = field.type.choices.filter((_, i) => i !== index);
+  }
+
+  function updateChoice(field: import('$lib/types').Field, index: number, value: string) {
+    if (field.type.kind !== 'atom' || !field.type.choices) return;
+    field.type.choices[index] = value;
+  }
 </script>
 
-<div class="form-panel">
+{#snippet choicesEditor(field: import('$lib/types').Field)}
+  {#if field.type.kind === 'atom' && 'choices' in field.type}
+    <div class="choices-editor">
+      {#each field.type.choices ?? [] as choice, ci}
+        <div class="choices-row">
+          <input type="text" class="choices-input" value={choice}
+            oninput={(e) => updateChoice(field, ci, (e.target as HTMLInputElement).value)} />
+          <button class="choices-remove" onclick={() => removeChoice(field, ci)}>&times;</button>
+        </div>
+      {/each}
+      <button class="choices-add" onclick={() => addChoice(field)}>+ 添加选项</button>
+    </div>
+  {/if}
+{/snippet}
+
+<div class="form-panel" style="width: {width}px">
   {#if entity}
     <div class="panel-header">
       <input
         class="entity-name-input"
         type="text"
         value={entity.name}
-        oninput={(e) => { entity.name = (e.target as HTMLInputElement).value; }}
+        oninput={(e) => {
+          const val = (e.target as HTMLInputElement).value;
+          if (val.trim()) entity.name = val;
+        }}
+        onblur={(e) => {
+          const val = (e.target as HTMLInputElement).value.trim();
+          if (!val) (e.target as HTMLInputElement).value = entity.name;
+        }}
       />
       <span class="field-count">{entity.fields.length} 个字段</span>
     </div>
@@ -162,41 +220,154 @@
 
                       <div class="field-control">
                         {#if field.type.kind === 'atom'}
-                          {#if field.type.subtype === 'text'}
-                            <input type="text" class="wp-input"
+                          {#if field.type.subtype === 'text' || field.type.subtype === 'password'}
+                            <input type={field.type.subtype} class="wp-input"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
-                              placeholder="输入文本..." />
+                              placeholder={field.type.subtype === 'password' ? '••••••' : '输入文本...'} />
                           {:else if field.type.subtype === 'number'}
                             <input type="number" class="wp-input"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
                               placeholder="0" />
+                          {:else if field.type.subtype === 'range'}
+                            <div class="range-wrapper">
+                              <input type="range" class="wp-range" min="0" max="100"
+                                value={getFieldValue(field.id, ri) as string || '50'}
+                                oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)} />
+                              <span class="range-value">{getFieldValue(field.id, ri) || '50'}</span>
+                            </div>
                           {:else if field.type.subtype === 'email'}
                             <input type="email" class="wp-input"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
                               placeholder="user@example.com" />
-                          {:else if field.type.subtype === 'url'}
+                          {:else if field.type.subtype === 'url' || field.type.subtype === 'oembed' || field.type.subtype === 'page_link'}
                             <input type="url" class="wp-input"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
-                              placeholder="https://..." />
+                              placeholder={field.type.subtype === 'oembed' ? 'YouTube / Vimeo URL...' : field.type.subtype === 'page_link' ? '页面 URL...' : 'https://...'} />
                           {:else if field.type.subtype === 'textarea'}
                             <textarea class="wp-input wp-textarea"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLTextAreaElement).value, ri)}
                               placeholder="输入文本..." rows="3"></textarea>
-                          {:else if field.type.subtype === 'image'}
+                          {:else if field.type.subtype === 'wysiwyg'}
+                            <textarea class="wp-input wp-textarea"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLTextAreaElement).value, ri)}
+                              placeholder="富文本内容（WordPress 中为可视化编辑器）..." rows="5"></textarea>
+                          {:else if field.type.subtype === 'image' || field.type.subtype === 'file'}
                             <input type="url" class="wp-input"
                               value={getFieldValue(field.id, ri) as string}
                               oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
-                              placeholder="图片 URL..." />
-                            {#if getFieldValue(field.id, ri)}
+                              placeholder={field.type.subtype === 'image' ? '图片 URL...' : '文件 URL...'} />
+                            {#if field.type.subtype === 'image' && getFieldValue(field.id, ri)}
                               <img class="image-preview"
                                 src={getFieldValue(field.id, ri) as string} alt="预览"
                                 onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                             {/if}
+                          {:else if field.type.subtype === 'gallery'}
+                            <textarea class="wp-input wp-textarea"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLTextAreaElement).value, ri)}
+                              placeholder="图片 URL（每行一个）..." rows="3"></textarea>
+                          {:else if field.type.subtype === 'select'}
+                            <select class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              onchange={(e) => handleInput(field.id, (e.target as HTMLSelectElement).value, ri)}>
+                              <option value="">— 选择 —</option>
+                              {#each field.type.choices ?? [] as choice}
+                                <option value={choice}>{choice}</option>
+                              {/each}
+                            </select>
+                            {@render choicesEditor(field)}
+                          {:else if field.type.subtype === 'radio'}
+                            <div class="choice-group">
+                              {#each field.type.choices ?? [] as choice, ci}
+                                <div class="choice-row">
+                                  <label class="choice-item">
+                                    <input type="radio" name="{field.id}-{ri}"
+                                      value={choice}
+                                      checked={getFieldValue(field.id, ri) === choice}
+                                      onchange={() => handleInput(field.id, choice, ri)} />
+                                  </label>
+                                  <input type="text" class="choices-input" value={choice}
+                                    oninput={(e) => updateChoice(field, ci, (e.target as HTMLInputElement).value)} />
+                                  <button class="choices-remove" onclick={() => removeChoice(field, ci)}>&times;</button>
+                                </div>
+                              {/each}
+                              <button class="choices-add" onclick={() => addChoice(field)}>+ 添加选项</button>
+                            </div>
+                          {:else if field.type.subtype === 'checkbox'}
+                            <div class="choice-group">
+                              {#each field.type.choices ?? [] as choice, ci}
+                                {@const currentVal = (getFieldValue(field.id, ri) as string[]) ?? []}
+                                <div class="choice-row">
+                                  <label class="choice-item">
+                                    <input type="checkbox"
+                                      value={choice}
+                                      checked={currentVal.includes(choice)}
+                                      onchange={(e) => {
+                                        const checked = (e.target as HTMLInputElement).checked;
+                                        const arr = [...currentVal];
+                                        if (checked) arr.push(choice); else arr.splice(arr.indexOf(choice), 1);
+                                        handleInput(field.id, arr, ri);
+                                      }} />
+                                  </label>
+                                  <input type="text" class="choices-input" value={choice}
+                                    oninput={(e) => updateChoice(field, ci, (e.target as HTMLInputElement).value)} />
+                                  <button class="choices-remove" onclick={() => removeChoice(field, ci)}>&times;</button>
+                                </div>
+                              {/each}
+                              <button class="choices-add" onclick={() => addChoice(field)}>+ 添加选项</button>
+                            </div>
+                          {:else if field.type.subtype === 'true_false'}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <div class="toggle-label"
+                              onclick={() => handleInput(field.id, !getFieldValue(field.id, ri), ri)}
+                              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleInput(field.id, !getFieldValue(field.id, ri), ri); } }}
+                              role="switch"
+                              aria-checked={!!getFieldValue(field.id, ri)}
+                              tabindex="0"
+                            >
+                              <span class="toggle-track" class:on={!!getFieldValue(field.id, ri)}>
+                                <span class="toggle-thumb"></span>
+                              </span>
+                              <span>{getFieldValue(field.id, ri) ? '是' : '否'}</span>
+                            </div>
+                          {:else if field.type.subtype === 'date_picker'}
+                            <input type="date" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)} />
+                          {:else if field.type.subtype === 'date_time_picker'}
+                            <input type="datetime-local" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)} />
+                          {:else if field.type.subtype === 'time_picker'}
+                            <input type="time" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)} />
+                          {:else if field.type.subtype === 'color_picker'}
+                            <div class="color-wrapper">
+                              <input type="color" class="wp-color"
+                                value={getFieldValue(field.id, ri) as string || '#000000'}
+                                oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)} />
+                              <input type="text" class="wp-input color-hex"
+                                value={getFieldValue(field.id, ri) as string || '#000000'}
+                                oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                                placeholder="#000000" />
+                            </div>
+                          {:else if field.type.subtype === 'google_map'}
+                            <input type="text" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="地址..." />
+                          {:else if field.type.subtype === 'user'}
+                            <input type="text" class="wp-input"
+                              value={getFieldValue(field.id, ri) as string}
+                              oninput={(e) => handleInput(field.id, (e.target as HTMLInputElement).value, ri)}
+                              placeholder="用户名..." />
                           {/if}
 
                         {:else if field.type.kind === 'ref'}
@@ -226,7 +397,6 @@
 
 <style lang="scss">
   .form-panel {
-    width: $panel-width;
     background: $color-bg;
     display: flex;
     flex-direction: column;
@@ -473,6 +643,154 @@
     border-radius: $border-radius;
     border: 1px solid $color-border-light;
     object-fit: cover;
+  }
+
+  .range-wrapper {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+  }
+
+  .wp-range {
+    flex: 1;
+    accent-color: $color-primary;
+  }
+
+  .range-value {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    min-width: 32px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .choice-group {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+  }
+
+  .choice-item {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+
+    input { accent-color: $color-primary; }
+  }
+
+  .choice-row {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    font-size: $font-size-sm;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-track {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: $color-border;
+    border-radius: 11px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+
+    &.on {
+      background: $color-primary;
+    }
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+    .on > & {
+      transform: translateX(18px);
+    }
+  }
+
+  .choices-editor {
+    margin-top: $spacing-sm;
+    padding-top: $spacing-sm;
+    border-top: 1px dashed $color-border-light;
+  }
+
+  .choices-row {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    margin-bottom: $spacing-xs;
+  }
+
+  .choices-input {
+    flex: 1;
+    padding: 2px $spacing-sm;
+    border: 1px solid $color-border-light;
+    border-radius: $border-radius;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    outline: none;
+
+    &:focus {
+      border-color: $color-primary;
+    }
+  }
+
+  .choices-remove {
+    color: $color-danger;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    opacity: 0.4;
+    padding: 0 2px;
+
+    &:hover { opacity: 1; }
+  }
+
+  .choices-add {
+    font-size: $font-size-xs;
+    color: $color-primary;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 0;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  .color-wrapper {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+  }
+
+  .wp-color {
+    width: 40px;
+    height: 34px;
+    border: 1px solid $color-border;
+    border-radius: $border-radius;
+    padding: 2px;
+    cursor: pointer;
+  }
+
+  .color-hex {
+    flex: 1;
   }
 
   .empty-state {

@@ -1,9 +1,20 @@
 // === 三原语类型系统 ===
 
-export type AtomSubtype = 'text' | 'number' | 'image' | 'url' | 'email' | 'textarea';
+// ACF 全部 Atom 字段类型
+export type AtomSubtype =
+  // Basic
+  | 'text' | 'textarea' | 'number' | 'range' | 'email' | 'url' | 'password'
+  // Content
+  | 'image' | 'file' | 'wysiwyg' | 'oembed' | 'gallery'
+  // Choice
+  | 'select' | 'checkbox' | 'radio' | 'true_false'
+  // jQuery
+  | 'google_map' | 'date_picker' | 'date_time_picker' | 'time_picker' | 'color_picker'
+  // Relational (Atom-like)
+  | 'page_link' | 'user';
 
 export type FieldType =
-  | { kind: 'atom'; subtype: AtomSubtype }
+  | { kind: 'atom'; subtype: AtomSubtype; choices?: string[] }
   | { kind: 'repeat'; fields: Field[] }
   | { kind: 'ref'; target: string; cardinality: '1' | 'n' | 'taxonomy' };
 

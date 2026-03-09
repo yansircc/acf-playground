@@ -11,9 +11,9 @@ $color-warning: #ffb900;
 $color-danger: #dc3232;
 
 // WP-style grays
-$color-bg: #f0f0f1;
-$color-bg-light: #f5f5f6;       // lighten(bg, 2%)
-$color-bg-lighter: #f3f3f3;     // lighten(bg, 1%)
+$color-bg: #F4EFEA;
+$color-bg-light: #F8F4F0;
+$color-bg-lighter: #F6F2EE;
 $color-surface: #ffffff;
 $color-border: #c3c4c7;
 $color-border-light: #e2e4e7;
@@ -24,8 +24,8 @@ $color-text-muted: #a7aaad;
 // Node colors
 $color-node-bg: #ffffff;
 $color-node-selected: #e5f5fa;
-$color-node-header: #23282d;
-$color-node-header-hover: #39424a; // lighten(node-header, 10%)
+$color-node-header: #383838;
+$color-node-header-hover: #4a4a4a;
 
 // === Typography (大屏友好) ===
 $font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
@@ -44,7 +44,7 @@ $spacing-lg: 24px;
 $spacing-xl: 32px;
 
 // === Layout ===
-$topbar-height: 56px;
+$topbar-height: 48px;
 $panel-width: 340px;
 
 // === Semantic colors ===
