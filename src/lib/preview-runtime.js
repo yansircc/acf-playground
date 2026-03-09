@@ -61,10 +61,22 @@ function getEntityByName(name) {
   return window.__schema.find(function(e) { return e.name === name; });
 }
 
+function isTaxonomyEntity(entitySchema) {
+  if (!entitySchema) return false;
+  return entitySchema.fields.some(function(f) {
+    return f.kind === 'ref' && f.target === entitySchema.id;
+  });
+}
+
 function getRecordLabel(entityId, rowIndex) {
   var entity = window.__schema.find(function(e) { return e.id === entityId; });
   if (!entity) return '#' + (rowIndex + 1);
-  var textField = entity.fields.find(function(f) { return f.kind === 'atom'; });
+  var textField = entity.fields.find(function(f) {
+    if (f.kind !== 'atom') return false;
+    var s = f.subtype;
+    return s !== 'image' && s !== 'gallery' && s !== 'wysiwyg' && s !== 'oembed' && s !== 'file';
+  });
+  if (!textField) textField = entity.fields.find(function(f) { return f.kind === 'atom'; });
   if (!textField) return entity.name + ' #' + (rowIndex + 1);
   var rows = window.__data[entityId] || [];
   if (rowIndex < 0 || rowIndex >= rows.length) return entity.name + ' #' + (rowIndex + 1);
@@ -242,12 +254,101 @@ function fillListingTemplate(entityName) {
 // === Detail 模板填充 ===
 
 function fillDetailTemplate(entityName, rowIndex) {
-  var tpl = window.__detailTemplates[entityName];
   var entity = getEntityByName(entityName);
+  if (entity && isTaxonomyEntity(entity)) {
+    return fillTaxonomyDetail(entityName, rowIndex);
+  }
+  var tpl = window.__detailTemplates[entityName];
   if (!tpl || !entity) return '<div class="p-8 text-gray-400">无详情模板<\/div>';
   var rows = window.__data[entity.id] || [];
   if (rowIndex < 0 || rowIndex >= rows.length) return '<div class="p-8 text-gray-400">记录不存在<\/div>';
   return fillRecord(tpl, entity, rows[rowIndex]);
+}
+
+// === Taxonomy Detail: term archive ===
+
+function fillTaxonomyDetail(entityName, termIndex) {
+  var tpl = window.__detailTemplates[entityName];
+  var entity = getEntityByName(entityName);
+  if (!tpl || !entity) return '<div class="p-8 text-gray-400">无详情模板<\/div>';
+  var rows = window.__data[entity.id] || [];
+  if (termIndex < 0 || termIndex >= rows.length) return '<div class="p-8 text-gray-400">记录不存在<\/div>';
+
+  // Fill the detail header template with term data
+  var filled = fillRecord(tpl, entity, rows[termIndex], termIndex);
+
+  // Build term archive: find all entities that reference this taxonomy
+  var archiveHtml = '';
+  window.__schema.forEach(function(otherEntity) {
+    if (otherEntity.id === entity.id) return;
+    // Find ref fields that point to this taxonomy
+    var taxRefFields = otherEntity.fields.filter(function(f) {
+      return f.kind === 'ref' && f.target === entity.id &&
+        (f.cardinality === 'taxonomy' || f.cardinality === 'n');
+    });
+    if (taxRefFields.length === 0) return;
+
+    // Find rows in otherEntity that reference this term
+    var otherRows = window.__data[otherEntity.id] || [];
+    var matchingRows = [];
+    otherRows.forEach(function(row, rowIdx) {
+      for (var fi = 0; fi < taxRefFields.length; fi++) {
+        var refVal = row[taxRefFields[fi].id];
+        var indices;
+        if (Array.isArray(refVal)) {
+          indices = refVal;
+        } else if (typeof refVal === 'number') {
+          indices = [refVal];
+        } else {
+          indices = [];
+        }
+        if (indices.indexOf(termIndex) !== -1) {
+          matchingRows.push({ row: row, index: rowIdx });
+          break;
+        }
+      }
+    });
+
+    if (matchingRows.length === 0) return;
+
+    // Extract the listing card template for this entity
+    var listingTpl = window.__listingTemplates[otherEntity.name];
+    if (!listingTpl) return;
+
+    var cardTemplate = extractCardTemplate(listingTpl, otherEntity.name);
+    if (!cardTemplate) return;
+
+    // Build cards for matching rows
+    var cardsHtml = matchingRows.map(function(match) {
+      var cardHtml = fillRecord(cardTemplate, otherEntity, match.row, match.index);
+      // Wrap with navigate-detail so clicking goes to that entity's detail
+      return cardHtml.replace(
+        /data-detail-index="[^"]*"/,
+        'data-navigate-detail="' + escapeHtml(otherEntity.name) + ':' + match.index + '"'
+      );
+    }).join('');
+
+    archiveHtml += '<div class="mb-6">' +
+      '<h3 class="text-lg font-bold mb-3 font-mono">' + escapeHtml(otherEntity.name) + '</h3>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">' + cardsHtml + '</div>' +
+      '</div>';
+  });
+
+  // Insert archive HTML into the placeholder
+  filled = filled.replace('<div data-acf-term-archive></div>', '<div data-acf-term-archive>' + archiveHtml + '</div>');
+
+  return filled;
+}
+
+function extractCardTemplate(listingHtml, entityName) {
+  // Parse the listing template and extract the inner HTML of <template data-acf-repeat="entityName">
+  var doc = new DOMParser().parseFromString('<div>' + listingHtml + '</div>', 'text/html');
+  var root = doc.body.firstElementChild;
+  var tpl = null;
+  root.querySelectorAll('template[data-acf-repeat]').forEach(function(t) {
+    if (t.getAttribute('data-acf-repeat') === entityName) tpl = t;
+  });
+  return tpl ? tpl.innerHTML : null;
 }
 
 // === 残留占位符检测 ===
@@ -395,6 +496,19 @@ function showListing(entityName) {
 }
 
 document.addEventListener('click', function(e) {
+  // Navigate-detail: cross-entity navigation from term archive cards
+  var navigateDetail = e.target.closest('[data-navigate-detail]');
+  if (navigateDetail) {
+    e.preventDefault();
+    var parts = navigateDetail.getAttribute('data-navigate-detail').split(':');
+    if (parts.length === 2) {
+      var navEntityName = parts[0];
+      var navRowIndex = parseInt(parts[1], 10);
+      navigateTo('entity-' + navEntityName);
+      showDetail(navEntityName, navRowIndex);
+    }
+    return;
+  }
   var detailLink = e.target.closest('[data-detail-index]');
   if (detailLink) {
     e.preventDefault();

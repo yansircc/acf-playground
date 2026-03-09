@@ -58,6 +58,11 @@ function isRepeat(f: ProjectedField): boolean {
   return f.type === 'repeat';
 }
 
+/** 适合作为标题/标签的字段：纯文本类 atom，排除 image/wysiwyg/oembed 等非文本类型 */
+function isLabelCandidate(f: ProjectedField): boolean {
+  return !isRef(f) && !isRepeat(f) && !isImage(f) && !isOembed(f) && f.type !== 'wysiwyg';
+}
+
 // === Atom 渲染 ===
 
 function atomCellHtml(f: ProjectedField): string {
@@ -94,13 +99,13 @@ function refDetailHtml(f: ProjectedField, allEntities: ProjectedEntity[]): strin
   if (f.cardinality === '1') {
     // ref(1): 链接 + 穿透第一个 atom 字段
     const target = allEntities.find(e => e.name === f.target);
-    const penetrate = target?.fields.find(tf => !isRef(tf) && !isRepeat(tf) && tf.name !== f.name);
+    const penetrate = target?.fields.find(tf => isLabelCandidate(tf) && tf.name !== f.name);
     const dot = penetrate ? ` <span class="text-[#646970] text-sm">({{${f.name}.${penetrate.name}}})</span>` : '';
     return `<a href="#entity-${f.target}" class="text-[#6FC2FF] hover:text-[#2BA5FF] hover:underline">{{${f.name}}}</a>${dot}`;
   }
   // ref(n) / taxonomy: badge list via ref-repeat
   const target = allEntities.find(e => e.name === f.target);
-  const labelField = target?.fields.find(tf => !isRef(tf) && !isRepeat(tf));
+  const labelField = target?.fields.find(tf => isLabelCandidate(tf));
   const label = labelField ? `{{${labelField.name}}}` : `{{${f.name}}}`;
   return `<template data-acf-ref-repeat="${f.name}"><a href="#entity-${f.target}" class="inline-block px-3 py-1 mr-1 mb-1 rounded-sm border-2 border-[#383838] text-sm font-mono text-[#6FC2FF] hover:text-[#2BA5FF] hover:underline">${label}</a> </template>`;
 }
@@ -139,11 +144,48 @@ type CardSlots = {
 function pickCardSlots(fields: ProjectedField[]): CardSlots {
   const visible = fields.filter(f => !isRepeat(f));
   const cover = visible.find(f => isImage(f)) ?? null;
-  const title = visible.find(f => !isImage(f) && !isRef(f)) ?? null;
+  const title = visible.find(f => isLabelCandidate(f) && !isImage(f)) ?? null;
   const metas = visible
-    .filter(f => f !== cover && f !== title)
+    .filter(f => f !== cover && f !== title && f.type !== 'wysiwyg')
     .slice(0, 2);
   return { cover, title, metas };
+}
+
+// === Taxonomy 检测 ===
+
+function isTaxEntity(entity: ProjectedEntity, allEntities: ProjectedEntity[]): boolean {
+  // Taxonomy entity 有一个自引用 ref 字段（parent）
+  return entity.fields.some(f => isRef(f) && f.target === entity.name);
+}
+
+// === Taxonomy 模板 ===
+
+function generateTaxonomyTemplates(
+  entity: ProjectedEntity,
+  allEntities: ProjectedEntity[],
+): { entity_name: string; listing_html: string; detail_html: string } {
+  // 找 taxonomy 的显示字段（排除自引用 parent）
+  const labelField = entity.fields.find(f => !isRef(f) && !isRepeat(f));
+  const label = labelField ? `{{${labelField.name}}}` : `{{__index__}}`;
+
+  // --- Listing: 标签云 ---
+  const listing_html = `<div class="flex flex-wrap gap-3 p-2">
+  <template data-acf-repeat="${entity.name}">
+    <div class="px-4 py-2 border-2 border-[#383838] rounded-sm cursor-pointer hover:bg-[#383838] hover:text-[#F4EFEA] transition-all"
+         data-detail-index="{{__index__}}">
+      ${label}
+    </div>
+  </template>
+</div>`;
+
+  // --- Detail: term archive ---
+  const detail_html = `<a href="#" data-back-to-listing class="inline-flex items-center gap-1 text-[#0073aa] hover:underline font-mono text-sm mb-4">← 返回列表</a>
+<div class="bg-white border-2 border-[#383838] rounded-sm p-6 mb-6">
+  <h2 class="text-2xl font-bold">${label} <span class="text-sm font-mono text-[#646970] uppercase">${entity.name}</span></h2>
+</div>
+<div data-acf-term-archive></div>`;
+
+  return { entity_name: entity.name, listing_html, detail_html };
 }
 
 // === 生成单个 Entity ===
@@ -181,7 +223,7 @@ function generateEntityTemplates(
 </div>`;
 
   // --- Detail: label/value rows ---
-  const firstAtom = entity.fields.find(f => !isRef(f) && !isRepeat(f));
+  const firstAtom = entity.fields.find(f => isLabelCandidate(f));
   const titlePlaceholder = firstAtom ? `{{${firstAtom.name}}}` : entity.name;
 
   const fieldRows = entity.fields.map(f => {
@@ -214,6 +256,10 @@ export function generateAllTemplates(
   schema: { entities: ProjectedEntity[] },
 ): TemplateResult {
   return {
-    pages: schema.entities.map(e => generateEntityTemplates(e, schema.entities)),
+    pages: schema.entities.map(e =>
+      isTaxEntity(e, schema.entities)
+        ? generateTaxonomyTemplates(e, schema.entities)
+        : generateEntityTemplates(e, schema.entities),
+    ),
   };
 }

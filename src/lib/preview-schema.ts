@@ -58,6 +58,9 @@ export function buildClientSchema(entities: Entity[]) {
     name: e.name,
     fields: e.fields.map((f) => {
       const base: Record<string, unknown> = { id: f.id, name: f.name, kind: f.type.kind };
+      if (f.type.kind === 'atom') {
+        base.subtype = f.type.subtype;
+      }
       if (f.type.kind === 'ref') {
         base.target = f.type.target;
         base.cardinality = f.type.cardinality;
