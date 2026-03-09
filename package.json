@@ -24,6 +24,7 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.78.0",
+		"@sveltejs/adapter-vercel": "^6.3.3",
 		"@xyflow/svelte": "^1.5.1",
 		"sass": "^1.97.3"
 	}
