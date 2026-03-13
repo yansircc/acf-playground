@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Field, FieldType, Entity, AtomSubtype } from '$lib/types';
   import { store } from '$lib/store.svelte';
+  import { tick } from 'svelte';
 
   interface Props {
     field: Field & { type: { kind: 'repeat'; fields: Field[] } };
@@ -47,16 +48,48 @@
   function removeRow(repeatIndex: number) {
     store.removeRepeaterRow(entity.id, field.id, repeatIndex, rowIndex);
   }
+
+  // --- Sub-field rename (double-click on tag or column header) ---
+  let editingSubFieldId: string | null = $state(null);
+  let editSubFieldName = $state('');
+  let editSubFieldInput: HTMLInputElement | undefined = $state();
+
+  async function startSubFieldEdit(sf: Field) {
+    editingSubFieldId = sf.id;
+    editSubFieldName = sf.name;
+    await tick();
+    editSubFieldInput?.focus();
+    editSubFieldInput?.select();
+  }
+
+  function commitSubFieldEdit(subFieldId: string) {
+    const trimmed = editSubFieldName.trim();
+    if (trimmed) {
+      store.updateField(entity.id, subFieldId, { name: trimmed });
+    }
+    editingSubFieldId = null;
+  }
 </script>
 
 <div class="repeater-group">
   <div class="sub-field-bar">
     <span class="sub-field-label">子字段：</span>
     {#each field.type.fields as sf (sf.id)}
-      <span class="sub-field-tag">
-        {sf.name}
-        <button class="tag-remove" onclick={() => removeSubField(sf.id)}>&times;</button>
-      </span>
+      {#if editingSubFieldId === sf.id}
+        <input
+          class="sub-field-edit"
+          bind:this={editSubFieldInput}
+          bind:value={editSubFieldName}
+          onblur={() => commitSubFieldEdit(sf.id)}
+          onkeydown={(e) => { if (e.key === 'Enter') commitSubFieldEdit(sf.id); if (e.key === 'Escape') editingSubFieldId = null; }}
+        />
+      {:else}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <span class="sub-field-tag" ondblclick={() => startSubFieldEdit(sf)} title="双击改名">
+          {sf.name}
+          <button class="tag-remove" onclick={() => removeSubField(sf.id)}>&times;</button>
+        </span>
+      {/if}
     {/each}
     <select
       class="add-sub-select"
@@ -93,7 +126,20 @@
           <tr>
             <th class="col-index">#</th>
             {#each field.type.fields as subField (subField.id)}
-              <th>{subField.name}</th>
+              {#if editingSubFieldId === subField.id}
+                <th>
+                  <input
+                    class="col-edit"
+                    bind:this={editSubFieldInput}
+                    bind:value={editSubFieldName}
+                    onblur={() => commitSubFieldEdit(subField.id)}
+                    onkeydown={(e) => { if (e.key === 'Enter') commitSubFieldEdit(subField.id); if (e.key === 'Escape') editingSubFieldId = null; }}
+                  />
+                </th>
+              {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <th ondblclick={() => startSubFieldEdit(subField)} class="editable" title="双击改名">{subField.name}</th>
+              {/if}
             {/each}
             <th class="col-action"></th>
           </tr>
@@ -180,6 +226,23 @@
     border-radius: 10px;
     font-size: $font-size-xs;
     font-weight: 500;
+    cursor: default;
+
+    &:hover {
+      background: $color-primary-bg-hover;
+    }
+  }
+
+  .sub-field-edit {
+    padding: 2px $spacing-sm;
+    border: 1px solid $color-primary;
+    border-radius: 10px;
+    font-size: $font-size-xs;
+    font-weight: 500;
+    color: $color-primary;
+    outline: none;
+    min-width: 0;
+    width: 80px;
   }
 
   .tag-remove {
@@ -230,6 +293,14 @@
       border-bottom: 1px solid $color-border;
       text-align: left;
       white-space: nowrap;
+
+      &.editable {
+        cursor: default;
+
+        &:hover {
+          color: $color-primary;
+        }
+      }
     }
 
     td {
@@ -254,6 +325,17 @@
     width: 28px;
     text-align: center;
     padding: 0 !important;
+  }
+
+  .col-edit {
+    width: 100%;
+    border: 1px solid $color-primary;
+    border-radius: $border-radius;
+    font-size: $font-size-xs;
+    font-weight: 600;
+    padding: 2px $spacing-xs;
+    outline: none;
+    background: $color-surface;
   }
 
   .cell-input {

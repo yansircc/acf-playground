@@ -169,10 +169,31 @@ class ACFStore {
     }
   }
 
+  moveField(entityId: string, fromIndex: number, toIndex: number): void {
+    const entity = this.entities.find((e) => e.id === entityId);
+    if (!entity) return;
+    const len = entity.fields.length;
+    if (fromIndex < 0 || fromIndex >= len) return;
+    if (toIndex < 0 || toIndex >= len) return;
+    if (fromIndex === toIndex) return;
+    const [field] = entity.fields.splice(fromIndex, 1);
+    entity.fields.splice(toIndex, 0, field);
+  }
+
   updateField(entityId: string, fieldId: string, updates: Partial<Pick<Field, 'name'>>): void {
     const entity = this.entities.find((e) => e.id === entityId);
     if (!entity) return;
-    const field = entity.fields.find((f) => f.id === fieldId);
+    // Search top-level fields first
+    let field = entity.fields.find((f) => f.id === fieldId);
+    // Then search repeater sub-fields
+    if (!field) {
+      for (const f of entity.fields) {
+        if (f.type.kind === 'repeat') {
+          const sub = f.type.fields.find((sf) => sf.id === fieldId);
+          if (sub) { field = sub; break; }
+        }
+      }
+    }
     if (!field) return;
     if (updates.name !== undefined) field.name = updates.name;
   }

@@ -3,6 +3,7 @@
   import type { NodeProps } from '@xyflow/svelte';
   import type { Entity, FieldType } from '$lib/types';
   import { store } from '$lib/store.svelte';
+  import { REORDER_MIME, isReorderDrag, computeMoveIndex } from '$lib/field-dnd';
   import { tick } from 'svelte';
 
   let { data }: NodeProps = $props();
@@ -94,6 +95,64 @@
   function removeField(fieldId: string) {
     store.removeField(entity.id, fieldId);
   }
+
+  // === 字段拖拽排序 ===
+  let dragFieldId: string | null = $state(null);
+  let dropTargetFieldId: string | null = $state(null);
+  let dropPosition: 'above' | 'below' | null = $state(null);
+
+  function handleFieldDragStart(e: DragEvent, fieldId: string) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(REORDER_MIME, fieldId);
+    dragFieldId = fieldId;
+  }
+
+  function handleFieldDragEnd() {
+    dragFieldId = null;
+    dropTargetFieldId = null;
+    dropPosition = null;
+  }
+
+  function handleFieldDragOver(e: DragEvent, fieldId: string) {
+    if (!isReorderDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer!.dropEffect = 'move';
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    dropTargetFieldId = fieldId;
+    dropPosition = e.clientY < mid ? 'above' : 'below';
+  }
+
+  function handleFieldDrop(e: DragEvent, targetFieldId: string) {
+    if (!isReorderDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const sourceFieldId = e.dataTransfer!.getData(REORDER_MIME);
+    const fromIndex = entity.fields.findIndex((f) => f.id === sourceFieldId);
+    const targetIndex = entity.fields.findIndex((f) => f.id === targetFieldId);
+    const pos = dropPosition ?? 'below';
+    const toIndex = computeMoveIndex(fromIndex, targetIndex, pos, entity.fields.length);
+
+    if (toIndex !== -1) {
+      store.moveField(entity.id, fromIndex, toIndex);
+    }
+
+    dragFieldId = null;
+    dropTargetFieldId = null;
+    dropPosition = null;
+  }
+
+  function handleFieldDragLeave(e: DragEvent) {
+    const row = e.currentTarget as HTMLElement;
+    if (!row.contains(e.relatedTarget as Node)) {
+      dropTargetFieldId = null;
+      dropPosition = null;
+    }
+  }
 </script>
 
 <div
@@ -117,12 +176,52 @@
     <button class="delete-btn" onclick={() => { if (confirm(`确定删除实体 "${entity.name}" 及其所有数据吗？`)) store.removeEntity(entity.id); }} title="Delete entity">&times;</button>
   </div>
 
-  <div class="entity-fields">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="entity-fields nodrag nopan"
+    ondragover={(e) => {
+      if (!isReorderDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer!.dropEffect = 'move';
+    }}
+    ondrop={(e) => {
+      if (!isReorderDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const sourceFieldId = e.dataTransfer!.getData(REORDER_MIME);
+      const fromIndex = entity.fields.findIndex((f) => f.id === sourceFieldId);
+      if (fromIndex === -1) return;
+      const toIndex = entity.fields.length - 1;
+      if (fromIndex !== toIndex) {
+        store.moveField(entity.id, fromIndex, toIndex);
+      }
+      dragFieldId = null;
+      dropTargetFieldId = null;
+      dropPosition = null;
+    }}
+  >
     {#if entity.fields.length === 0}
       <div class="empty-hint">拖入字段到此处</div>
     {/if}
     {#each entity.fields as field (field.id)}
-      <div class="field-row">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="field-row"
+        class:dragging={dragFieldId === field.id}
+        class:drag-over-above={dropTargetFieldId === field.id && dropPosition === 'above'}
+        class:drag-over-below={dropTargetFieldId === field.id && dropPosition === 'below'}
+        ondragover={(e) => handleFieldDragOver(e, field.id)}
+        ondrop={(e) => handleFieldDrop(e, field.id)}
+        ondragleave={handleFieldDragLeave}
+      >
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <span
+          class="drag-grip nodrag"
+          draggable="true"
+          ondragstart={(e) => handleFieldDragStart(e, field.id)}
+          ondragend={handleFieldDragEnd}
+        >⠿</span>
         <span class="field-icon">{fieldIcon(field.type)}</span>
         {#if editingFieldId === field.id}
           <input
@@ -239,6 +338,32 @@
     &:hover {
       background: $color-bg;
     }
+
+    &.dragging {
+      opacity: 0.3;
+    }
+
+    &.drag-over-above {
+      box-shadow: inset 0 2px 0 0 $color-primary;
+    }
+
+    &.drag-over-below {
+      box-shadow: inset 0 -2px 0 0 $color-primary;
+    }
+  }
+
+  .drag-grip {
+    cursor: grab;
+    color: $color-text-muted;
+    font-size: $font-size-xs;
+    user-select: none;
+    opacity: 0;
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    .field-row:hover & { opacity: 0.6; }
+    &:hover { opacity: 1 !important; }
+    &:active { cursor: grabbing; }
   }
 
   .field-icon {
