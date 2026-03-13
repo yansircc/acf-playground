@@ -23,7 +23,7 @@ function fieldToSchemaProperty(field: Field): Record<string, unknown> | null {
 		if (Object.keys(subProps).length === 0) return null;
 		return {
 			type: 'array',
-			description: `${field.name} (重复器，生成 2-3 行)`,
+			description: `${field.name} (repeater, generate 2-3 rows)`,
 			items: { type: 'object', properties: subProps, required }
 		};
 	}
@@ -42,24 +42,24 @@ function atomToSchema(
 		return { type: 'number', description: `${fieldName} (${sub})` };
 	}
 	if (sub === 'true_false') {
-		return { type: 'boolean', description: `${fieldName} (是/否)` };
+		return { type: 'boolean', description: `${fieldName} (true/false)` };
 	}
 	if (sub === 'image' || sub === 'file') {
 		return {
 			type: 'string',
-			description: `${fieldName} (${sub}) — 用 https://picsum.photos/seed/{随机英文单词}/400/300`
+			description: `${fieldName} (${sub}) — use https://picsum.photos/seed/{random-word}/400/300`
 		};
 	}
 	if (sub === 'gallery') {
 		return {
 			type: 'string',
-			description: `${fieldName} (图库) — 3 个图片 URL，每行一个，用 https://picsum.photos/seed/{随机词}/400/300`
+			description: `${fieldName} (gallery) — 3 image URLs, one per line, use https://picsum.photos/seed/{random-word}/400/300`
 		};
 	}
 	if (sub === 'select' || sub === 'radio') {
 		const choices = ft.choices ?? [];
 		if (choices.length > 0) {
-			return { type: 'string', enum: choices, description: `${fieldName} (从选项中选择)` };
+			return { type: 'string', enum: choices, description: `${fieldName} (pick from choices)` };
 		}
 		return { type: 'string', description: `${fieldName} (${sub})` };
 	}
@@ -69,10 +69,10 @@ function atomToSchema(
 			return {
 				type: 'array',
 				items: { type: 'string', enum: choices },
-				description: `${fieldName} (多选，从选项中选 1-2 个)`
+				description: `${fieldName} (multi-select, pick 1-2 from choices)`
 			};
 		}
-		return { type: 'array', items: { type: 'string' }, description: `${fieldName} (多选)` };
+		return { type: 'array', items: { type: 'string' }, description: `${fieldName} (multi-select)` };
 	}
 
 	// 其余 atom 一律 string
@@ -107,7 +107,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const tool = {
 			name: 'mock_data',
-			description: '生成模拟数据行',
+			description: 'Generate mock data rows',
 			input_schema: {
 				type: 'object',
 				properties: {
@@ -148,11 +148,11 @@ export const POST: RequestHandler = async ({ request }) => {
 				max_tokens: 4096,
 				tool_choice: { type: 'tool', name: 'mock_data' },
 				tools: [tool],
-				system: `你是 B2B 外贸场景的模拟数据生成器。为实体「${entity.name}」生成 ${safeCount} 条逼真的中文模拟数据。数据要多样化、贴近真实商业场景。`,
+				system: `You are a mock data generator for B2B foreign trade scenarios. Generate ${safeCount} realistic English mock data entries for entity "${entity.name}". Data should be diverse and resemble real business scenarios.`,
 				messages: [
 					{
 						role: 'user',
-						content: `请为以下实体生成 ${safeCount} 条模拟数据：\n\n实体名：${entity.name}\n字段：\n${fieldSummary}`
+						content: `Generate ${safeCount} mock data entries for:\n\nEntity: ${entity.name}\nFields:\n${fieldSummary}`
 					}
 				]
 			})
