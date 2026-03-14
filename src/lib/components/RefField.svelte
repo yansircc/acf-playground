@@ -17,8 +17,8 @@
   {#if field.type.target === ''}
     <!-- target 未设置：提示用户在画布上连线 -->
     <div class="ref-hint">在画布上从此字段连线到目标实体</div>
-  {:else if field.type.cardinality === '1' || field.type.cardinality === 'taxonomy'}
-    <!-- Ref(1) / taxonomy: dropdown to pick a record -->
+  {:else if field.type.cardinality === '1'}
+    <!-- Ref(1): dropdown to pick a single record -->
     {@const refOptions = store.getRefOptions(field.type.target)}
     <select
       class="wp-input"
@@ -34,7 +34,7 @@
       {/each}
     </select>
   {:else}
-    <!-- Ref(n): checkbox list to multi-select records -->
+    <!-- Ref(n) / taxonomy: checkbox list to multi-select records -->
     {@const refOptions = store.getRefOptions(field.type.target)}
     {@const currentVal = (value || []) as number[]}
     <div class="checkbox-list">

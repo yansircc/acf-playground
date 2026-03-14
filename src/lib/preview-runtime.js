@@ -89,7 +89,7 @@ function resolveRef(fieldSchema, rawValue) {
   var targetId = fieldSchema.target;
   if (!targetId) return '';
   if (fieldSchema.cardinality === 'n' || fieldSchema.cardinality === 'taxonomy') {
-    var arr = Array.isArray(rawValue) ? rawValue : [];
+    var arr = Array.isArray(rawValue) ? rawValue : (typeof rawValue === 'number' ? [rawValue] : []);
     return arr.map(function(idx) { return getRecordLabel(targetId, idx); }).join(', ');
   }
   if (typeof rawValue === 'number') return getRecordLabel(targetId, rawValue);
@@ -123,7 +123,7 @@ function expandRefRepeat(refFieldSchema, row, itemTemplate) {
   var rawVal = row[refFieldSchema.id];
   var indices;
   if (refFieldSchema.cardinality === 'n' || refFieldSchema.cardinality === 'taxonomy') {
-    indices = Array.isArray(rawVal) ? rawVal : [];
+    indices = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'number' ? [rawVal] : []);
   } else {
     indices = typeof rawVal === 'number' ? [rawVal] : [];
   }

@@ -139,16 +139,18 @@ function repeaterDetailHtml(f: ProjectedField, _allEntities: ProjectedEntity[]):
 type CardSlots = {
   cover: ProjectedField | null;   // image → 封面
   title: ProjectedField | null;   // 第一个 text 类 → 标题
-  metas: ProjectedField[];        // 最多 2 个摘要字段
+  metas: ProjectedField[];        // 最多 3 个摘要字段（ref 优先）
 };
 
 function pickCardSlots(fields: ProjectedField[]): CardSlots {
   const visible = fields.filter(f => !isRepeat(f));
   const cover = visible.find(f => isImage(f)) ?? null;
   const title = visible.find(f => isLabelCandidate(f) && !isImage(f)) ?? null;
-  const metas = visible
-    .filter(f => f !== cover && f !== title && f.type !== 'wysiwyg')
-    .slice(0, 2);
+  const rest = visible.filter(f => f !== cover && f !== title && f.type !== 'wysiwyg');
+  // Prioritize ref fields (relationships/taxonomy) — they add the most context on cards
+  const refs = rest.filter(f => isRef(f));
+  const others = rest.filter(f => !isRef(f));
+  const metas = [...refs, ...others].slice(0, 3);
   return { cover, title, metas };
 }
 

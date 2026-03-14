@@ -12,9 +12,9 @@ export function generateRefValue(
   const targetId = field.type.target;
   if (!targetId) return '';
   const targetRows = allData[targetId] ?? [];
-  if (targetRows.length === 0) return field.type.cardinality === 'n' ? [] : '';
+  if (targetRows.length === 0) return field.type.cardinality === '1' ? '' : [];
 
-  if (field.type.cardinality === 'n') {
+  if (field.type.cardinality === 'n' || field.type.cardinality === 'taxonomy') {
     const count = Math.min(randInt(1, 3), targetRows.length);
     const indices = Array.from({ length: targetRows.length }, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
