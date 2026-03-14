@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { FieldType } from '$lib/types';
+  import { ATOM_GROUPS } from '$lib/field-catalog';
+  import type { AtomOption } from '$lib/field-catalog';
   import { store } from '$lib/store.svelte';
 
   type ToolboxItem = {
@@ -8,47 +10,21 @@
     fieldType: FieldType;
   };
 
-  const basicFields: ToolboxItem[] = [
-    { label: '文本', icon: 'Aa', fieldType: { kind: 'atom', subtype: 'text' } },
-    { label: '多行', icon: '¶', fieldType: { kind: 'atom', subtype: 'textarea' } },
-    { label: '数字', icon: '#', fieldType: { kind: 'atom', subtype: 'number' } },
-    { label: '范围', icon: '↔', fieldType: { kind: 'atom', subtype: 'range' } },
-    { label: '邮箱', icon: '@', fieldType: { kind: 'atom', subtype: 'email' } },
-    { label: '链接', icon: '🔗', fieldType: { kind: 'atom', subtype: 'url' } },
-    { label: '密码', icon: '🔒', fieldType: { kind: 'atom', subtype: 'password' } },
-  ];
-
-  const contentFields: ToolboxItem[] = [
-    { label: '图片', icon: '🖼', fieldType: { kind: 'atom', subtype: 'image' } },
-    { label: '文件', icon: '📎', fieldType: { kind: 'atom', subtype: 'file' } },
-    { label: '编辑器', icon: '📝', fieldType: { kind: 'atom', subtype: 'wysiwyg' } },
-    { label: 'oEmbed', icon: '▶', fieldType: { kind: 'atom', subtype: 'oembed' } },
-    { label: '图库', icon: '🖼️', fieldType: { kind: 'atom', subtype: 'gallery' } },
-  ];
-
-  const choiceFields: ToolboxItem[] = [
-    { label: '选择', icon: '▼', fieldType: { kind: 'atom', subtype: 'select', choices: ['选项 1', '选项 2', '选项 3'] } },
-    { label: '复选', icon: '☑', fieldType: { kind: 'atom', subtype: 'checkbox', choices: ['选项 A', '选项 B', '选项 C'] } },
-    { label: '单选', icon: '⊙', fieldType: { kind: 'atom', subtype: 'radio', choices: ['选项 A', '选项 B', '选项 C'] } },
-    { label: '是/否', icon: '✓', fieldType: { kind: 'atom', subtype: 'true_false' } },
-  ];
-
-  const dateFields: ToolboxItem[] = [
-    { label: '日期', icon: '📅', fieldType: { kind: 'atom', subtype: 'date_picker' } },
-    { label: '日期时间', icon: '📅', fieldType: { kind: 'atom', subtype: 'date_time_picker' } },
-    { label: '时间', icon: '⏰', fieldType: { kind: 'atom', subtype: 'time_picker' } },
-    { label: '颜色', icon: '🎨', fieldType: { kind: 'atom', subtype: 'color_picker' } },
-    { label: '页面链接', icon: '📄', fieldType: { kind: 'atom', subtype: 'page_link' } },
-    { label: '地图', icon: '📍', fieldType: { kind: 'atom', subtype: 'google_map' } },
-    { label: '用户', icon: '👤', fieldType: { kind: 'atom', subtype: 'user' } },
-  ];
-
   const advancedFields: ToolboxItem[] = [
     { label: '重复器', icon: '🔁', fieldType: { kind: 'repeat', fields: [] } },
     { label: '关联', icon: '⇉', fieldType: { kind: 'ref', target: '', cardinality: 'n' } },
     { label: '文章对象', icon: '→', fieldType: { kind: 'ref', target: '', cardinality: '1' } },
     { label: '分类', icon: '🏷', fieldType: { kind: 'ref', target: '', cardinality: 'taxonomy' } },
   ];
+
+  function handleAtomDragStart(event: DragEvent, opt: AtomOption) {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.setData(
+      'application/acf-field',
+      JSON.stringify({ action: 'add-field', fieldType: opt.defaultFieldType() })
+    );
+    event.dataTransfer.effectAllowed = 'copy';
+  }
 
   function handleDragStart(event: DragEvent, item: ToolboxItem) {
     if (!event.dataTransfer) return;
@@ -96,70 +72,24 @@
     </div>
   </div>
   <div class="toolbox-divider"></div>
-  <div class="toolbox-group">
-    <span class="group-label">基础</span>
-    {#each basicFields as item}
-      <div
-        class="badge"
-        draggable="true"
-        ondragstart={(e) => handleDragStart(e, item)}
-        role="button"
-        tabindex="0"
-      >
-        <span class="badge-icon">{item.icon}</span>
-        <span class="badge-label">{item.label}</span>
-      </div>
-    {/each}
-  </div>
-  <div class="toolbox-divider"></div>
-  <div class="toolbox-group">
-    <span class="group-label">内容</span>
-    {#each contentFields as item}
-      <div
-        class="badge"
-        draggable="true"
-        ondragstart={(e) => handleDragStart(e, item)}
-        role="button"
-        tabindex="0"
-      >
-        <span class="badge-icon">{item.icon}</span>
-        <span class="badge-label">{item.label}</span>
-      </div>
-    {/each}
-  </div>
-  <div class="toolbox-divider"></div>
-  <div class="toolbox-group">
-    <span class="group-label">选择</span>
-    {#each choiceFields as item}
-      <div
-        class="badge"
-        draggable="true"
-        ondragstart={(e) => handleDragStart(e, item)}
-        role="button"
-        tabindex="0"
-      >
-        <span class="badge-icon">{item.icon}</span>
-        <span class="badge-label">{item.label}</span>
-      </div>
-    {/each}
-  </div>
-  <div class="toolbox-divider"></div>
-  <div class="toolbox-group">
-    <span class="group-label">其他</span>
-    {#each dateFields as item}
-      <div
-        class="badge"
-        draggable="true"
-        ondragstart={(e) => handleDragStart(e, item)}
-        role="button"
-        tabindex="0"
-      >
-        <span class="badge-icon">{item.icon}</span>
-        <span class="badge-label">{item.label}</span>
-      </div>
-    {/each}
-  </div>
-  <div class="toolbox-divider"></div>
+  {#each ATOM_GROUPS as group, gi}
+    <div class="toolbox-group">
+      <span class="group-label">{group.label}</span>
+      {#each group.options as opt}
+        <div
+          class="badge"
+          draggable="true"
+          ondragstart={(e) => handleAtomDragStart(e, opt)}
+          role="button"
+          tabindex="0"
+        >
+          <span class="badge-icon">{opt.icon}</span>
+          <span class="badge-label">{opt.label}</span>
+        </div>
+      {/each}
+    </div>
+    <div class="toolbox-divider"></div>
+  {/each}
   <div class="toolbox-group">
     <span class="group-label">高级</span>
     {#each advancedFields as item}

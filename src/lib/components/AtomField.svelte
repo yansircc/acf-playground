@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Field } from '$lib/types';
+  import AtomValueInput from './AtomValueInput.svelte';
 
   let {
     field,
@@ -15,6 +16,13 @@
 
   // 只有 kind === 'atom' 时才会渲染这个组件
   const subtype = $derived(field.type.kind === 'atom' ? field.type.subtype : 'text');
+
+  /** 需要增强 UI 的子类型 — 其余全部委托给 AtomValueInput */
+  const ENHANCED_SUBTYPES = new Set([
+    'select', 'radio', 'checkbox', 'wysiwyg', 'image', 'file', 'oembed', 'true_false',
+  ]);
+
+  const isEnhanced = $derived(ENHANCED_SUBTYPES.has(subtype));
 
   // oEmbed URL → embed URL 转换
   function toEmbedUrl(url: string): string | null {
@@ -86,28 +94,9 @@
   {/if}
 {/snippet}
 
-{#if subtype === 'text' || subtype === 'password'}
-  <input type={subtype} class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder={subtype === 'password' ? '••••••' : '输入文本...'} />
-{:else if subtype === 'number'}
-  <input type="number" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder="0" />
-{:else if subtype === 'range'}
-  <div class="range-wrapper">
-    <input type="range" class="wp-range" min="0" max="100"
-      value={value as string || '50'}
-      oninput={(e) => onchange((e.target as HTMLInputElement).value)} />
-    <span class="range-value">{value || '50'}</span>
-  </div>
-{:else if subtype === 'email'}
-  <input type="email" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder="user@example.com" />
+{#if !isEnhanced}
+  <!-- 简单类型：委托给 AtomValueInput -->
+  <AtomValueInput {field} {value} {onchange} {rowIndex} />
 {:else if subtype === 'oembed'}
   <input type="url" class="wp-input"
     value={value as string}
@@ -123,16 +112,6 @@
       ></iframe>
     </div>
   {/if}
-{:else if subtype === 'url' || subtype === 'page_link'}
-  <input type="url" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder={subtype === 'page_link' ? '页面 URL...' : 'https://...'} />
-{:else if subtype === 'textarea'}
-  <textarea class="wp-input wp-textarea"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLTextAreaElement).value)}
-    placeholder="输入文本..." rows="3"></textarea>
 {:else if subtype === 'wysiwyg'}
   <div class="wysiwyg-wrapper">
     <div class="wysiwyg-toolbar">
@@ -176,11 +155,6 @@
       {/if}
     </div>
   {/if}
-{:else if subtype === 'gallery'}
-  <textarea class="wp-input wp-textarea"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLTextAreaElement).value)}
-    placeholder="图片 URL（每行一个）..." rows="3"></textarea>
 {:else if subtype === 'select'}
   <select class="wp-input"
     value={value as string}
@@ -211,7 +185,7 @@
 {:else if subtype === 'checkbox'}
   <div class="choice-group">
     {#each field.type.kind === 'atom' && field.type.choices ? field.type.choices : [] as choice, ci}
-      {@const currentVal = (value as string[]) ?? []}
+      {@const currentVal = Array.isArray(value) ? value as string[] : []}
       <div class="choice-row">
         <label class="choice-item">
           <input type="checkbox"
@@ -245,38 +219,6 @@
     </span>
     <span>{value ? '是' : '否'}</span>
   </div>
-{:else if subtype === 'date_picker'}
-  <input type="date" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)} />
-{:else if subtype === 'date_time_picker'}
-  <input type="datetime-local" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)} />
-{:else if subtype === 'time_picker'}
-  <input type="time" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)} />
-{:else if subtype === 'color_picker'}
-  <div class="color-wrapper">
-    <input type="color" class="wp-color"
-      value={value as string || '#000000'}
-      oninput={(e) => onchange((e.target as HTMLInputElement).value)} />
-    <input type="text" class="wp-input color-hex"
-      value={value as string || '#000000'}
-      oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-      placeholder="#000000" />
-  </div>
-{:else if subtype === 'google_map'}
-  <input type="text" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder="地址..." />
-{:else if subtype === 'user'}
-  <input type="text" class="wp-input"
-    value={value as string}
-    oninput={(e) => onchange((e.target as HTMLInputElement).value)}
-    placeholder="用户名..." />
 {/if}
 
 <style lang="scss">
@@ -297,11 +239,6 @@
     }
   }
 
-  .wp-textarea {
-    resize: vertical;
-    min-height: 60px;
-  }
-
   .image-preview {
     margin-top: $spacing-sm;
     max-width: 100%;
@@ -309,25 +246,6 @@
     border-radius: $border-radius;
     border: 1px solid $color-border-light;
     object-fit: cover;
-  }
-
-  .range-wrapper {
-    display: flex;
-    align-items: center;
-    gap: $spacing-sm;
-  }
-
-  .wp-range {
-    flex: 1;
-    accent-color: $color-primary;
-  }
-
-  .range-value {
-    font-size: $font-size-sm;
-    color: $color-text-secondary;
-    min-width: 32px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
   }
 
   .choice-group {
@@ -444,19 +362,6 @@
     display: flex;
     align-items: center;
     gap: $spacing-sm;
-  }
-
-  .wp-color {
-    width: 40px;
-    height: 34px;
-    border: 1px solid $color-border;
-    border-radius: $border-radius;
-    padding: 2px;
-    cursor: pointer;
-  }
-
-  .color-hex {
-    flex: 1;
   }
 
   // === oEmbed Preview ===

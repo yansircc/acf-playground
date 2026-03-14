@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Field, Entity } from '$lib/types';
   import { store } from '$lib/store.svelte';
+  import AtomValueInput from './AtomValueInput.svelte';
 
   interface Props {
     entity: Entity;
@@ -107,12 +108,12 @@
         <div class="inline-field">
           <span class="inline-label">{field.name}</span>
           {#if field.type.kind === 'atom'}
-            <input
-              type="text"
-              class="wp-input wp-input-sm"
-              value={(row[field.id] ?? '') as string}
-              oninput={(e) => store.updateFieldData(entity.id, field.id, (e.target as HTMLInputElement).value, ri)}
-              placeholder={field.name}
+            <AtomValueInput
+              {field}
+              value={row[field.id] ?? ''}
+              onchange={(v) => store.updateFieldData(entity.id, field.id, v, ri)}
+              rowIndex={ri}
+              variant="compact"
             />
           {:else if field.type.kind === 'ref' && field.type.target === entity.id}
             <select

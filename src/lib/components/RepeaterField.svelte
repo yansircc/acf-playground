@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Field, FieldType, Entity, AtomSubtype } from '$lib/types';
+  import { ATOM_GROUPS } from '$lib/field-catalog';
   import { store } from '$lib/store.svelte';
   import { tick } from 'svelte';
+  import AtomValueInput from './AtomValueInput.svelte';
 
   interface Props {
     field: Field & { type: { kind: 'repeat'; fields: Field[] } };
@@ -10,15 +12,6 @@
   }
 
   let { field, entity, rowIndex }: Props = $props();
-
-  const atomSubtypes: { label: string; value: AtomSubtype }[] = [
-    { label: '文本', value: 'text' },
-    { label: '多行', value: 'textarea' },
-    { label: '数字', value: 'number' },
-    { label: '邮箱', value: 'email' },
-    { label: '链接', value: 'url' },
-    { label: '图片', value: 'image' },
-  ];
 
   const otherEntities = $derived(
     store.entities.filter((e) => e.id !== entity.id)
@@ -100,14 +93,20 @@
           const targetId = sel.value.slice(4);
           addSubField({ kind: 'ref', target: targetId, cardinality: '1' });
         } else {
-          addSubField({ kind: 'atom', subtype: sel.value as AtomSubtype });
+          const subtype = sel.value as AtomSubtype;
+          const opt = ATOM_GROUPS.flatMap(g => g.options).find(o => o.value === subtype);
+          addSubField(opt ? opt.defaultFieldType() : { kind: 'atom', subtype });
         }
         sel.value = '';
       }}
     >
       <option value="">+ 添加</option>
-      {#each atomSubtypes as opt}
-        <option value={opt.value}>{opt.label}</option>
+      {#each ATOM_GROUPS as group}
+        <optgroup label={group.label}>
+          {#each group.options as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </optgroup>
       {/each}
       {#if otherEntities.length > 0}
         <optgroup label="引用">
@@ -166,11 +165,12 @@
                       {/each}
                     </select>
                   {:else}
-                    <input
-                      type="text"
-                      class="cell-input"
-                      value={(repeatRow[subField.id] ?? '') as string}
-                      oninput={(e) => handleCellInput(subField.id, (e.target as HTMLInputElement).value, rri)}
+                    <AtomValueInput
+                      field={subField}
+                      value={repeatRow[subField.id] ?? ''}
+                      onchange={(v) => handleCellInput(subField.id, v, rri)}
+                      rowIndex={rri}
+                      variant="table"
                     />
                   {/if}
                 </td>
