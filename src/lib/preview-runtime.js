@@ -64,7 +64,7 @@ function getEntityByName(name) {
 function isTaxonomyEntity(entitySchema) {
   if (!entitySchema) return false;
   return entitySchema.fields.some(function(f) {
-    return f.kind === 'ref' && f.target === entitySchema.id;
+    return f.kind === 'ref' && f.target === entitySchema.id && f.cardinality === 'taxonomy';
   });
 }
 

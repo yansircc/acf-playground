@@ -309,11 +309,11 @@ class ACFStore {
 
   // === Derived helpers ===
 
-  isSelfRefEntity(entityId: string): boolean {
+  isTaxonomyEntity(entityId: string): boolean {
     const entity = this.entities.find((e) => e.id === entityId);
     if (!entity) return false;
     return entity.fields.some(
-      (f) => f.type.kind === 'ref' && f.type.target === entityId
+      (f) => f.type.kind === 'ref' && f.type.target === entityId && f.type.cardinality === 'taxonomy'
     );
   }
 
