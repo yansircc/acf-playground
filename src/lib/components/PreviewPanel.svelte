@@ -59,10 +59,19 @@
   // === HTML Shell：客户端确定性生成 ===
 
   function buildShell(entityContents: Record<string, { listing: string; detail: string }>): string {
+    const isTaxEntity = (e: typeof store.entities[0]) =>
+      e.fields.some(f => f.type.kind === 'ref' && f.type.target === e.id);
+
     const names = store.entities.map((e) => e.name);
 
-    const navItems = names.map((name) => {
-      const safe = escapeAttr(name);
+    const navItems = store.entities.map((entity) => {
+      const safe = escapeAttr(entity.name);
+      if (isTaxEntity(entity)) {
+        return `<div class="nav-dropdown">
+        <span data-nav="entity-${safe}" class="nav-tab nav-tab-tax">${safe} ▾</span>
+        <div class="dropdown-menu" data-tax-menu="${safe}"></div>
+      </div>`;
+      }
       return `<a href="#entity-${safe}" data-nav="entity-${safe}" class="nav-tab">${safe}</a>`;
     }).join('\n      ');
 
@@ -113,6 +122,38 @@
     }
     .nav-tab:hover { background: #F1F1F1; }
     .nav-tab.active { background: #383838; color: #F4EFEA; border-color: #383838; }
+    .nav-dropdown { position: relative; display: inline-flex; }
+    .dropdown-menu {
+      display: none; position: absolute; top: 100%; left: 0;
+      min-width: 180px; background: white; border: 2px solid #383838;
+      border-radius: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 100; padding: 4px 0; padding-top: 6px;
+    }
+    .dropdown-menu::before {
+      content: ''; position: absolute; top: -8px; left: 0; right: 0; height: 10px;
+    }
+    .nav-dropdown:hover > .dropdown-menu { display: block; }
+    .dropdown-item {
+      display: block; padding: 8px 16px; font-size: 14px; color: #383838;
+      text-decoration: none; cursor: pointer; position: relative;
+      white-space: nowrap; font-family: ui-monospace, monospace;
+    }
+    .dropdown-item:hover { background: #F1F1F1; }
+    .dropdown-item.has-children { padding-right: 28px; }
+    .dropdown-item.has-children::after {
+      content: '›'; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); font-size: 16px; line-height: 1;
+    }
+    .dropdown-submenu {
+      display: none; position: absolute; left: 100%; top: -4px;
+      min-width: 160px; background: white; border: 2px solid #383838;
+      border-radius: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 4px 0; padding-left: 6px;
+    }
+    .dropdown-submenu::before {
+      content: ''; position: absolute; top: 0; left: -8px; bottom: 0; width: 10px;
+    }
+    .has-children:hover > .dropdown-submenu { display: block; }
     .__debug-banner {
       position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
       background: #FFF3CD; border-top: 2px solid #FFDE00; color: #383838;
@@ -133,7 +174,7 @@
   <\/script>
 </head>
 <body>
-  <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b-2 border-[#383838] flex items-center gap-1 px-6 py-3 overflow-x-auto">
+  <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b-2 border-[#383838] flex items-center gap-1 px-6 py-3 flex-wrap">
       ${navItems}
   </nav>
 

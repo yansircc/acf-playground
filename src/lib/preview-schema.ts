@@ -1,4 +1,5 @@
 import type { Field, Entity, EntityData } from '$lib/types';
+import type { ProjectedField, ProjectedEntity } from '$lib/template-generator';
 
 /** HTML 属性转义 */
 export function escapeAttr(s: string): string {
@@ -6,7 +7,7 @@ export function escapeAttr(s: string): string {
 }
 
 /** 将 Field 投影为 LLM 可读的语义结构（去掉 UUID） */
-export function projectField(f: Field, entities: Entity[]): Record<string, unknown> {
+function projectField(f: Field, entities: Entity[]): ProjectedField {
   if (f.type.kind === 'atom') {
     return { name: f.name, type: f.type.subtype };
   }
@@ -28,7 +29,7 @@ export function projectField(f: Field, entities: Entity[]): Record<string, unkno
 }
 
 /** Schema 语义投影：entities → { name, fields[] } */
-export function projectSchema(entities: Entity[]) {
+export function projectSchema(entities: Entity[]): { entities: ProjectedEntity[] } {
   return {
     entities: entities.map((e) => ({
       name: e.name,

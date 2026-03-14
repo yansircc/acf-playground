@@ -6,7 +6,7 @@
 // 可直接喂给 parseEntityContents()。
 // ============================================================
 
-type ProjectedField = {
+export type ProjectedField = {
   name: string;
   type: string;
   subtype?: string;
@@ -15,7 +15,7 @@ type ProjectedField = {
   subFields?: ProjectedField[];
 };
 
-type ProjectedEntity = {
+export type ProjectedEntity = {
   name: string;
   fields: ProjectedField[];
 };
@@ -65,8 +65,8 @@ function isLabelCandidate(f: ProjectedField): boolean {
 
 // === Atom 渲染 ===
 
-function atomCellHtml(f: ProjectedField): string {
-  const p = `{{${f.name}}}`;
+function atomCellHtml(f: ProjectedField, key?: string): string {
+  const p = `{{${key ?? f.name}}}`;
   if (isImage(f)) return `<img src="${p}" alt="${f.name}" class="w-10 h-10 rounded-sm object-cover border-2 border-[#383838]">`;
   if (isOembed(f)) return `<span class="text-[#0073aa] text-sm" data-oembed="${p}">▶ ${f.name}</span>`;
   if (f.type === 'email') return `<a href="mailto:${p}" class="text-[#0073aa] hover:underline">${p}</a>`;
@@ -117,12 +117,13 @@ function repeaterDetailHtml(f: ProjectedField, _allEntities: ProjectedEntity[]):
   if (subs.length === 0) return `<span class="text-[#646970]">（空 Repeater）</span>`;
 
   const ths = subs.map(sf => `<th class="px-3 py-2 text-left text-xs font-mono uppercase tracking-wide">${sf.name}</th>`).join('');
-  const tds = subs.map(sf => {
+  const tds = subs.map((sf, idx) => {
+    const key = `__sf_${idx}__`;
     let cell: string;
     if (isRef(sf)) {
-      cell = `<a href="#entity-${sf.target}" class="text-[#6FC2FF] hover:underline">{{${sf.name}}}</a>`;
+      cell = `<a href="#entity-${sf.target}" class="text-[#6FC2FF] hover:underline">{{${key}}}</a>`;
     } else {
-      cell = atomCellHtml(sf);
+      cell = atomCellHtml(sf, key);
     }
     return `<td class="px-3 py-2 border-t border-[#e0dbd5]">${cell}</td>`;
   }).join('');
@@ -153,7 +154,7 @@ function pickCardSlots(fields: ProjectedField[]): CardSlots {
 
 // === Taxonomy 检测 ===
 
-function isTaxEntity(entity: ProjectedEntity, allEntities: ProjectedEntity[]): boolean {
+function isTaxEntity(entity: ProjectedEntity): boolean {
   // Taxonomy entity 有一个自引用 ref 字段（parent）
   return entity.fields.some(f => isRef(f) && f.target === entity.name);
 }
@@ -162,25 +163,17 @@ function isTaxEntity(entity: ProjectedEntity, allEntities: ProjectedEntity[]): b
 
 function generateTaxonomyTemplates(
   entity: ProjectedEntity,
-  allEntities: ProjectedEntity[],
+  _allEntities: ProjectedEntity[],
 ): { entity_name: string; listing_html: string; detail_html: string } {
   // 找 taxonomy 的显示字段（排除自引用 parent）
   const labelField = entity.fields.find(f => !isRef(f) && !isRepeat(f));
   const label = labelField ? `{{${labelField.name}}}` : `{{__index__}}`;
 
-  // --- Listing: 标签云 ---
-  const listing_html = `<div class="flex flex-wrap gap-3 p-2">
-  <template data-acf-repeat="${entity.name}">
-    <div class="px-4 py-2 border-2 border-[#383838] rounded-sm cursor-pointer hover:bg-[#383838] hover:text-[#F4EFEA] transition-all"
-         data-detail-index="{{__index__}}">
-      ${label}
-    </div>
-  </template>
-</div>`;
+  // Taxonomy 不需要 listing 页面 — 导航通过 nav 下拉菜单
+  const listing_html = '';
 
-  // --- Detail: term archive ---
-  const detail_html = `<a href="#" data-back-to-listing class="inline-flex items-center gap-1 text-[#0073aa] hover:underline font-mono text-sm mb-4">← 返回列表</a>
-<div class="bg-white border-2 border-[#383838] rounded-sm p-6 mb-6">
+  // Detail: term archive（无返回按钮，taxonomy 通过下拉菜单导航）
+  const detail_html = `<div class="bg-white border-2 border-[#383838] rounded-sm p-6 mb-6">
   <h2 class="text-2xl font-bold">${label} <span class="text-sm font-mono text-[#646970] uppercase">${entity.name}</span></h2>
 </div>
 <div data-acf-term-archive></div>`;
@@ -257,7 +250,7 @@ export function generateAllTemplates(
 ): TemplateResult {
   return {
     pages: schema.entities.map(e =>
-      isTaxEntity(e, schema.entities)
+      isTaxEntity(e)
         ? generateTaxonomyTemplates(e, schema.entities)
         : generateEntityTemplates(e, schema.entities),
     ),

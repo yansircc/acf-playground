@@ -165,11 +165,12 @@ function fillRecord(template, entitySchema, row, rowIndex) {
         if (repeatRows.length === 0) { tpl.remove(); return; }
         var html = repeatRows.map(function(rr) {
           var filledRow = tpl.innerHTML;
-          field.fields.forEach(function(sf) {
+          field.fields.forEach(function(sf, idx) {
+            var key = '__sf_' + idx + '__';
             if (sf.kind === 'ref') {
-              filledRow = filledRow.split('{{' + sf.name + '}}').join(escapeHtml(resolveRef(sf, rr[sf.id])));
+              filledRow = filledRow.split('{{' + key + '}}').join(escapeHtml(resolveRef(sf, rr[sf.id])));
             } else {
-              filledRow = filledRow.split('{{' + sf.name + '}}').join(escapeHtml(rr[sf.id]));
+              filledRow = filledRow.split('{{' + key + '}}').join(escapeHtml(rr[sf.id]));
             }
           });
           // repeater 内 ref 穿透
@@ -222,9 +223,16 @@ function fillRecord(template, entitySchema, row, rowIndex) {
 function fillListingTemplate(entityName) {
   var tpl = window.__listingTemplates[entityName];
   var entity = getEntityByName(entityName);
-  if (!tpl || !entity) {
-    if (!tpl) reportWarning('[' + entityName + '] LLM 未生成 listing 模板（API 调用可能失败）');
-    if (!entity) reportWarning('[' + entityName + '] schema 中找不到该实体');
+  if (!entity) {
+    reportWarning('[' + entityName + '] schema 中找不到该实体');
+    return '<div class="p-8 text-gray-400 text-xl">暂无内容<\/div>';
+  }
+  // Taxonomy 没有 listing 模板（通过导航下拉菜单浏览）
+  if (isTaxonomyEntity(entity)) {
+    return '<div class="p-8 text-gray-400 text-xl">从导航栏选择分类查看<\/div>';
+  }
+  if (!tpl) {
+    reportWarning('[' + entityName + '] LLM 未生成 listing 模板（API 调用可能失败）');
     return '<div class="p-8 text-gray-400 text-xl">暂无内容<\/div>';
   }
   var rows = window.__data[entity.id] || [{}];
@@ -267,6 +275,30 @@ function fillDetailTemplate(entityName, rowIndex) {
 
 // === Taxonomy Detail: term archive ===
 
+// 收集一个 term 的所有后代 index（含自身）
+function collectDescendants(entitySchema, termIndex) {
+  var rows = window.__data[entitySchema.id] || [];
+  var parentField = entitySchema.fields.find(function(f) {
+    return f.kind === 'ref' && f.target === entitySchema.id;
+  });
+  if (!parentField) return [termIndex];
+  var result = [termIndex];
+  var queue = [termIndex];
+  while (queue.length > 0) {
+    var current = queue.shift();
+    for (var i = 0; i < rows.length; i++) {
+      if (i === current) continue;
+      if (result.indexOf(i) !== -1) continue;
+      var p = rows[i][parentField.id];
+      if (typeof p === 'number' && p === current) {
+        result.push(i);
+        queue.push(i);
+      }
+    }
+  }
+  return result;
+}
+
 function fillTaxonomyDetail(entityName, termIndex) {
   var tpl = window.__detailTemplates[entityName];
   var entity = getEntityByName(entityName);
@@ -276,6 +308,9 @@ function fillTaxonomyDetail(entityName, termIndex) {
 
   // Fill the detail header template with term data
   var filled = fillRecord(tpl, entity, rows[termIndex], termIndex);
+
+  // Collect this term + all descendants for hierarchical matching
+  var termSet = collectDescendants(entity, termIndex);
 
   // Build term archive: find all entities that reference this taxonomy
   var archiveHtml = '';
@@ -302,7 +337,12 @@ function fillTaxonomyDetail(entityName, termIndex) {
         } else {
           indices = [];
         }
-        if (indices.indexOf(termIndex) !== -1) {
+        // Match if any of the post's term indices overlap with termSet (current + descendants)
+        var matched = false;
+        for (var ti = 0; ti < indices.length; ti++) {
+          if (termSet.indexOf(indices[ti]) !== -1) { matched = true; break; }
+        }
+        if (matched) {
           matchingRows.push({ row: row, index: rowIdx });
           break;
         }
@@ -377,6 +417,57 @@ function processOembedElements(container) {
   });
 }
 
+// === Taxonomy 下拉菜单 ===
+
+function buildTaxTree(entitySchema) {
+  var rows = window.__data[entitySchema.id] || [];
+  if (rows.length === 0) return [];
+  var parentField = entitySchema.fields.find(function(f) {
+    return f.kind === 'ref' && f.target === entitySchema.id;
+  });
+  if (!parentField) return [];
+  var nodes = rows.map(function(row, i) {
+    var label = getRecordLabel(entitySchema.id, i);
+    var parentIdx = row[parentField.id];
+    return { index: i, label: label, parentIdx: typeof parentIdx === 'number' ? parentIdx : -1, children: [] };
+  });
+  var roots = [];
+  nodes.forEach(function(node) {
+    if (node.parentIdx >= 0 && node.parentIdx < nodes.length && node.parentIdx !== node.index) {
+      nodes[node.parentIdx].children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+function renderDropdownItems(nodes, entityName) {
+  return nodes.map(function(node) {
+    var hasChildren = node.children.length > 0;
+    var submenu = hasChildren
+      ? '<div class="dropdown-submenu">' + renderDropdownItems(node.children, entityName) + '</div>'
+      : '';
+    var cls = 'dropdown-item' + (hasChildren ? ' has-children' : '');
+    return '<div class="' + cls + '" data-tax-term="' + escapeHtml(entityName) + ':' + node.index + '">'
+      + escapeHtml(node.label) + submenu + '</div>';
+  }).join('');
+}
+
+function populateTaxMenus() {
+  document.querySelectorAll('[data-tax-menu]').forEach(function(menu) {
+    var entityName = menu.getAttribute('data-tax-menu');
+    var entity = getEntityByName(entityName);
+    if (!entity) return;
+    var tree = buildTaxTree(entity);
+    if (tree.length === 0) {
+      menu.innerHTML = '<div class="dropdown-item" style="color:#646970;cursor:default">暂无分类</div>';
+    } else {
+      menu.innerHTML = renderDropdownItems(tree, entityName);
+    }
+  });
+}
+
 // === 渲染入口 ===
 
 function renderAllListings() {
@@ -432,6 +523,7 @@ function renderCurrentView() {
 window.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'data-update') {
     window.__data = e.data.data;
+    populateTaxMenus();
     renderCurrentView();
   }
 });
@@ -496,6 +588,19 @@ function showListing(entityName) {
 }
 
 document.addEventListener('click', function(e) {
+  // Taxonomy dropdown: click term → navigate to term archive
+  var taxTerm = e.target.closest('[data-tax-term]');
+  if (taxTerm) {
+    e.preventDefault();
+    var parts = taxTerm.getAttribute('data-tax-term').split(':');
+    if (parts.length === 2) {
+      var taxEntityName = parts[0];
+      var termIndex = parseInt(parts[1], 10);
+      navigateTo('entity-' + taxEntityName);
+      showDetail(taxEntityName, termIndex);
+    }
+    return;
+  }
   // Navigate-detail: cross-entity navigation from term archive cards
   var navigateDetail = e.target.closest('[data-navigate-detail]');
   if (navigateDetail) {
@@ -558,6 +663,7 @@ document.addEventListener('click', function(e) {
 
 document.addEventListener('DOMContentLoaded', function() {
   try {
+    populateTaxMenus();
     renderAllListings();
   } catch (err) {
     reportError('DOMContentLoaded', err);

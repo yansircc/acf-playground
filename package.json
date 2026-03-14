@@ -13,10 +13,9 @@
 		"test": "bun test"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
-		"esbuild": "^0.27.3",
+		"esbuild": "^0.27.4",
 		"svelte": "^5.51.0",
 		"svelte-check": "^4.4.2",
 		"typescript": "^5.9.3",
@@ -24,7 +23,6 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.78.0",
 		"@sveltejs/adapter-vercel": "^6.3.3",
 		"@xyflow/svelte": "^1.5.1",
 		"sass": "^1.97.3"

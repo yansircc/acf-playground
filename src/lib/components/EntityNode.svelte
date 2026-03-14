@@ -293,6 +293,14 @@
     pointer-events: none !important;
   }
 
+  // source handle 加大点击区域
+  :global(.svelte-flow__handle-right.svelte-flow__handle-source) {
+    width: 14px !important;
+    height: 14px !important;
+    border-width: 2px !important;
+    right: -7px !important;
+  }
+
   .edit-name {
     background: rgba(255,255,255,0.2);
     border: 1px solid rgba(255,255,255,0.5);
@@ -318,6 +326,7 @@
 
   .entity-fields {
     padding: $spacing-sm;
+    padding-right: $spacing-md;
   }
 
   .empty-hint {
@@ -395,6 +404,7 @@
     color: $color-danger;
     font-size: $font-size-base;
     transition: opacity 0.15s;
+    margin-right: 8px;
     .field-row:hover & {
       opacity: 1;
     }

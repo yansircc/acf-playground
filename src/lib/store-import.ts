@@ -1,7 +1,7 @@
 import type { StoreState } from './types';
 import { isACFFormat, importACF } from './acf-import';
 
-export function validateStoreState(raw: unknown): StoreState {
+function validateStoreState(raw: unknown): StoreState {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid JSON');
   const obj = raw as Record<string, unknown>;
 
