@@ -5,6 +5,10 @@ import { getSchemaForField } from './acf-field-schema';
 
 type ACFItem = Record<string, unknown>;
 
+type ConditionalLogicRule = Record<string, unknown>;
+type ConditionalLogicGroup = ConditionalLogicRule[];
+type ConditionalLogic = ConditionalLogicGroup[];
+
 /** Detect if a parsed JSON value is ACF export format */
 export function isACFFormat(data: unknown): data is ACFItem[] {
   if (!Array.isArray(data) || data.length === 0) return false;
@@ -30,6 +34,46 @@ function normalizeHideOnScreen(value: unknown): string[] {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value as string[];
   return [];
+}
+
+function normalizeItems(value: unknown): ACFItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is ACFItem => Boolean(item) && typeof item === 'object');
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : [];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+}
+
+function extractLocationSlug(value: unknown): string {
+  if (!Array.isArray(value)) return '';
+
+  for (const group of value) {
+    if (!Array.isArray(group)) continue;
+    for (const rule of group) {
+      if (!rule || typeof rule !== 'object') continue;
+      if (rule.param === 'post_type' && typeof rule.value === 'string') {
+        return rule.value;
+      }
+    }
+  }
+
+  return '';
+}
+
+function normalizeConditionalLogic(value: unknown): ConditionalLogic | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const groups = value
+    .filter(Array.isArray)
+    .map((group) =>
+      group.filter((rule): rule is ConditionalLogicRule => Boolean(rule) && typeof rule === 'object'),
+    )
+    .filter((group) => group.length > 0);
+
+  return groups.length > 0 ? groups : undefined;
 }
 
 /** Map an ACF field type string to our FieldType + config. Returns null for unsupported types. */
@@ -98,7 +142,7 @@ function mapACFField(
 
     // Repeater
     case 'repeater': {
-      const subFields = (acfField.sub_fields as ACFItem[]) || [];
+      const subFields = normalizeItems(acfField.sub_fields);
       const mapped = subFields
         .map((sf) => mapACFField(sf, slugToEntityId, taxSlugToEntityId, acfKeyToFieldId))
         .filter((f): f is Field => f !== null);
@@ -115,7 +159,7 @@ function mapACFField(
 
     // Relationship (cardinality N)
     case 'relationship': {
-      const postTypes = (acfField.post_type as string[]) || [];
+      const postTypes = normalizeStringArray(acfField.post_type);
       const targetSlug = postTypes[0] || '';
       const targetId = slugToEntityId.get(targetSlug) || '';
       fieldType = { kind: 'ref', target: targetId, cardinality: 'n' };
@@ -130,7 +174,7 @@ function mapACFField(
 
     // Post Object (cardinality 1)
     case 'post_object': {
-      const postTypes = (acfField.post_type as string[]) || [];
+      const postTypes = normalizeStringArray(acfField.post_type);
       const targetSlug = postTypes[0] || '';
       const targetId = slugToEntityId.get(targetSlug) || '';
       fieldType = { kind: 'ref', target: targetId, cardinality: '1' };
@@ -145,7 +189,7 @@ function mapACFField(
 
     // Taxonomy
     case 'taxonomy': {
-      const taxSlugs = (acfField.taxonomy as string[]) || [acfField.taxonomy as string];
+      const taxSlugs = normalizeStringArray(acfField.taxonomy);
       const targetSlug = taxSlugs[0] || '';
       const targetId = taxSlugToEntityId.get(targetSlug) || '';
       fieldType = { kind: 'ref', target: targetId, cardinality: 'taxonomy' };
@@ -164,8 +208,9 @@ function mapACFField(
   }
 
   // Conditional logic — preserve raw ACF format for now (two-pass resolution later)
-  if (acfField.conditional_logic && acfField.conditional_logic !== 0) {
-    config.conditional_logic = acfField.conditional_logic;
+  const conditionalLogic = normalizeConditionalLogic(acfField.conditional_logic);
+  if (conditionalLogic) {
+    config.conditional_logic = conditionalLogic;
   }
 
   return { id, name, type: fieldType, config: Object.keys(config).length > 0 ? config : undefined };
@@ -197,7 +242,7 @@ export function importACF(items: ACFItem[]): StoreState {
   for (const tax of taxonomies) {
     const slug = tax.taxonomy as string;
     const title = tax.title as string;
-    const objectTypes = (tax.object_type as string[]) || [];
+    const objectTypes = normalizeStringArray(tax.object_type);
     taxonomyMap.set(slug, { title, key: tax.key as string, objectTypes });
   }
 
@@ -209,8 +254,7 @@ export function importACF(items: ACFItem[]): StoreState {
   // 3a. Create normal entities from field groups
   // Track which entities are already created by slug
   for (const fg of fieldGroups) {
-    const location = fg.location as Array<Array<{ param: string; value: string }>>;
-    const slug = location?.[0]?.[0]?.value || '';
+    const slug = extractLocationSlug(fg.location);
 
     const ptInfo = postTypeMap.get(slug);
     const entityName = ptInfo ? ptInfo.title : slug || (fg.title as string);
@@ -263,8 +307,7 @@ export function importACF(items: ACFItem[]): StoreState {
   const acfKeyToFieldId = new Map<string, string>();
 
   for (const fg of fieldGroups) {
-    const location = fg.location as Array<Array<{ param: string; value: string }>>;
-    const slug = location?.[0]?.[0]?.value || '';
+    const slug = extractLocationSlug(fg.location);
     const entityId = slugToEntityId.get(slug);
     if (!entityId) continue;
 
@@ -287,7 +330,7 @@ export function importACF(items: ACFItem[]): StoreState {
       key: fg.key as string,
     };
 
-    const acfFields = (fg.fields as ACFItem[]) || [];
+    const acfFields = normalizeItems(fg.fields);
     for (const af of acfFields) {
       const field = mapACFField(af, slugToEntityId, taxSlugToEntityId, acfKeyToFieldId);
       if (field) group.fields.push(field);
@@ -369,8 +412,9 @@ function resolveConditionalLogicRefs(
   groupFieldIds: Set<string>,
 ) {
   const cl = field.config?.conditional_logic;
-  if (!cl || cl === 0) return;
-  for (const orGroup of cl as Record<string, unknown>[][]) {
+  if (!Array.isArray(cl)) return;
+  for (const orGroup of cl as ConditionalLogic) {
+    if (!Array.isArray(orGroup)) continue;
     for (const rule of orGroup) {
       const internalId = keyMap.get(rule.field as string);
       if (internalId && groupFieldIds.has(internalId)) {
