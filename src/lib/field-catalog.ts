@@ -5,6 +5,7 @@ export type AtomOption = {
   label: string;
   icon: string;
   defaultFieldType: () => FieldType;
+  initialConfig?: () => Record<string, unknown>;
 };
 
 export type AtomGroup = {
@@ -17,7 +18,11 @@ function atom(value: AtomSubtype, label: string, icon: string): AtomOption {
 }
 
 function atomWithChoices(value: AtomSubtype, label: string, icon: string, choices: string[]): AtomOption {
-  return { value, label, icon, defaultFieldType: () => ({ kind: 'atom', subtype: value, choices: [...choices] }) };
+  return {
+    value, label, icon,
+    defaultFieldType: () => ({ kind: 'atom', subtype: value }),
+    initialConfig: () => ({ choices: [...choices] }),
+  };
 }
 
 export const ATOM_GROUPS: AtomGroup[] = [

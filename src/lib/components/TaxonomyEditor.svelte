@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Field, Entity } from '$lib/types';
+  import { allFields } from '$lib/types';
   import { store } from '$lib/store.svelte';
   import AtomValueInput from './AtomValueInput.svelte';
 
@@ -23,8 +24,8 @@
 
   function buildTree(): TreeNode[] {
     const rows = store.data[entity.id] ?? [];
-    const nameField = entity.fields.find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
-    const parentField = entity.fields.find((f) => f.type.kind === 'ref' && f.type.target === entity.id);
+    const nameField = allFields(entity).find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
+    const parentField = allFields(entity).find((f) => f.type.kind === 'ref' && f.type.target === entity.id);
     if (!nameField || !parentField) return [];
 
     const nodes: TreeNode[] = rows.map((row, i) => ({
@@ -48,7 +49,7 @@
 
   function getSelfRefOptions(excludeRowIndex: number): { index: number; name: string }[] {
     const rows = store.data[entity.id] ?? [];
-    const nameField = entity.fields.find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
+    const nameField = allFields(entity).find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
     return rows
       .map((row, i) => ({ index: i, name: nameField ? (row[nameField.id] as string || `项目 ${i + 1}`) : `项目 ${i + 1}` }))
       .filter((_, i) => i !== excludeRowIndex);
@@ -104,7 +105,7 @@
       }}>&times;</button>
     </div>
     <div class="field-control">
-      {#each entity.fields as field (field.id)}
+      {#each allFields(entity) as field (field.id)}
         <div class="inline-field">
           <span class="inline-label">{field.name}</span>
           {#if field.type.kind === 'atom'}

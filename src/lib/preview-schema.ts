@@ -1,4 +1,5 @@
 import type { Field, Entity, EntityData } from '$lib/types';
+import { allFields } from '$lib/types';
 import type { ProjectedField, ProjectedEntity } from '$lib/template-generator';
 
 /** HTML 属性转义 */
@@ -33,7 +34,7 @@ export function projectSchema(entities: Entity[]): { entities: ProjectedEntity[]
   return {
     entities: entities.map((e) => ({
       name: e.name,
-      fields: e.fields.map((f) => projectField(f, entities)),
+      fields: allFields(e).map((f) => projectField(f, entities)),
     })),
   };
 }
@@ -57,7 +58,7 @@ export function buildClientSchema(entities: Entity[]) {
   return entities.map((e) => ({
     id: e.id,
     name: e.name,
-    fields: e.fields.map((f) => {
+    fields: allFields(e).map((f) => {
       const base: Record<string, unknown> = { id: f.id, name: f.name, kind: f.type.kind };
       if (f.type.kind === 'atom') {
         base.subtype = f.type.subtype;

@@ -1,4 +1,6 @@
 import type { Entity, Field } from './types';
+import { allFields } from './types';
+import { getSchemaForField, getDefaultGroupConfig } from './acf-field-schema';
 
 // === ACF field (complete format matching WordPress ACF import) ===
 
@@ -14,7 +16,7 @@ type ACFFieldGroup = {
   style: string;
   label_placement: string;
   instruction_placement: string;
-  hide_on_screen: string;
+  hide_on_screen: string | string[];
   active: boolean;
   description: string;
   show_in_rest: number;
@@ -47,7 +49,30 @@ function choicesObj(choices?: string[]): Record<string, string> {
   return obj;
 }
 
-// === Field conversion ===
+// Serialize conditional_logic: strip internal _resolved metadata, convert field IDs
+function serializeConditionalLogic(cl: unknown): unknown {
+  if (!cl || cl === 0) return 0;
+  if (!Array.isArray(cl)) return 0;
+  const result = (cl as Record<string, unknown>[][]).map(orGroup =>
+    orGroup.map(rule => {
+      const { _resolved, ...rest } = rule;
+      // Convert internal field ID to ACF key format if resolved
+      if (_resolved === true && rest.field && typeof rest.field === 'string' && !String(rest.field).startsWith('field_')) {
+        rest.field = `field_${idToKey(rest.field as string)}`;
+      }
+      return rest;
+    })
+  );
+  return result;
+}
+
+// Serialize hide_on_screen: [] → '', string[] → array
+function serializeHideOnScreen(value: unknown): string | string[] {
+  if (!value || !Array.isArray(value) || value.length === 0) return '';
+  return value;
+}
+
+// === Field conversion (config-driven) ===
 
 function fieldToACF(field: Field, entities: Entity[], parentRepeaterKey?: string): ACFField {
   const ft = field.type;
@@ -60,10 +85,10 @@ function fieldToACF(field: Field, entities: Entity[], parentRepeaterKey?: string
     name,
     'aria-label': '',
     type: '',
-    instructions: '',
-    required: 0,
-    conditional_logic: 0,
-    wrapper: { width: '', class: '', id: '' },
+    instructions: field.config?.instructions ?? '',
+    required: field.config?.required ?? 0,
+    conditional_logic: serializeConditionalLogic(field.config?.conditional_logic),
+    wrapper: field.config?.wrapper ?? { width: '', class: '', id: '' },
   };
 
   if (parentRepeaterKey) {
@@ -73,192 +98,42 @@ function fieldToACF(field: Field, entities: Entity[], parentRepeaterKey?: string
   switch (ft.kind) {
     case 'atom':
       base.type = ft.subtype;
-      switch (ft.subtype) {
-        case 'text':
-        case 'email':
-        case 'url':
-        case 'password':
-          base.default_value = '';
-          base.placeholder = '';
-          base.prepend = '';
-          base.append = '';
-          base.maxlength = '';
-          break;
-        case 'textarea':
-          base.default_value = '';
-          base.placeholder = '';
-          base.maxlength = '';
-          base.new_lines = '';
-          base.rows = '';
-          break;
-        case 'number':
-          base.default_value = '';
-          base.placeholder = '';
-          base.prepend = '';
-          base.append = '';
-          break;
-        case 'range':
-          base.default_value = '';
-          base.prepend = '';
-          base.append = '';
-          base.min = 0;
-          base.max = 100;
-          base.step = 1;
-          break;
-        case 'image':
-          base.return_format = 'url';
-          base.preview_size = 'medium';
-          base.library = 'all';
-          base.mime_types = '';
-          base.min_width = 0;
-          base.min_height = 0;
-          base.min_size = 0;
-          base.max_width = 0;
-          base.max_height = 0;
-          base.max_size = 0;
-          break;
-        case 'file':
-          base.return_format = 'url';
-          base.library = 'all';
-          base.mime_types = '';
-          base.min_size = 0;
-          base.max_size = 0;
-          break;
-        case 'wysiwyg':
-          base.default_value = '';
-          base.tabs = 'all';
-          base.toolbar = 'full';
-          base.media_upload = 1;
-          base.delay = 0;
-          break;
-        case 'oembed':
-          base.width = '';
-          base.height = '';
-          break;
-        case 'gallery':
-          base.return_format = 'array';
-          base.preview_size = 'medium';
-          base.library = 'all';
-          base.mime_types = '';
-          base.min = 0;
-          base.max = 0;
-          base.insert = 'append';
-          base.min_width = 0;
-          base.min_height = 0;
-          base.min_size = 0;
-          base.max_width = 0;
-          base.max_height = 0;
-          base.max_size = 0;
-          break;
-        case 'select':
-          base.default_value = '';
-          base.placeholder = '';
-          base.choices = choicesObj(ft.choices);
-          base.allow_null = 0;
-          base.multiple = 0;
-          base.ui = 0;
-          base.ajax = 0;
-          base.return_format = 'value';
-          break;
-        case 'checkbox':
-          base.default_value = '';
-          base.choices = choicesObj(ft.choices);
-          base.allow_custom = 0;
-          base.save_custom = 0;
-          base.toggle = 0;
-          base.return_format = 'value';
-          base.layout = 'vertical';
-          break;
-        case 'radio':
-          base.default_value = '';
-          base.choices = choicesObj(ft.choices);
-          base.allow_null = 0;
-          base.other_choice = 0;
-          base.save_other_choice = 0;
-          base.return_format = 'value';
-          base.layout = 'vertical';
-          break;
-        case 'true_false':
-          base.default_value = 0;
-          base.ui = 0;
-          base.ui_on_text = '';
-          base.ui_off_text = '';
-          break;
-        case 'date_picker':
-          base.display_format = 'Y/m/d';
-          base.return_format = 'Y-m-d';
-          base.first_day = 1;
-          break;
-        case 'date_time_picker':
-          base.type = 'date_time_picker';
-          base.display_format = 'Y/m/d H:i';
-          base.return_format = 'Y-m-d H:i:s';
-          base.first_day = 1;
-          break;
-        case 'time_picker':
-          base.display_format = 'H:i';
-          base.return_format = 'H:i:s';
-          break;
-        case 'color_picker':
-          base.default_value = '';
-          base.enable_opacity = 0;
-          base.return_format = 'string';
-          break;
-        case 'page_link':
-          base.post_type = [];
-          base.allow_null = 0;
-          base.multiple = 0;
-          base.allow_archives = 1;
-          break;
-        case 'google_map':
-          base.center_lat = '';
-          base.center_lng = '';
-          base.zoom = '';
-          base.height = '';
-          break;
-        case 'user':
-          base.role = [];
-          base.return_format = 'array';
-          base.multiple = 0;
-          base.allow_null = 0;
-          break;
+      // choices special handling
+      if (['select', 'checkbox', 'radio'].includes(ft.subtype)) {
+        base.choices = choicesObj(field.config?.choices as string[]);
       }
       break;
 
     case 'repeat':
       base.type = 'repeater';
-      base.min = 0;
-      base.max = 0;
-      base.layout = 'table';
-      base.button_label = '';
-      base.collapsed = '';
-      base.rows_per_page = 20;
       base.sub_fields = ft.fields.map((f) => fieldToACF(f, entities, key));
       break;
 
     case 'ref': {
-      // Look up the target entity's slug
       const targetEntity = entities.find((e) => e.id === ft.target);
       const targetSlug = targetEntity ? entitySlug(targetEntity) : 'post';
 
       if (ft.cardinality === '1') {
         base.type = 'post_object';
-        base.return_format = 'object';
         base.post_type = [targetSlug];
       } else if (ft.cardinality === 'taxonomy') {
         base.type = 'taxonomy';
         base.taxonomy = targetEntity ? entitySlug(targetEntity) : 'category';
-        base.return_format = 'id';
-        base.field_type = 'checkbox';
       } else {
         base.type = 'relationship';
-        base.return_format = 'object';
-        base.min = 0;
-        base.max = 0;
         base.post_type = [targetSlug];
       }
       break;
     }
+  }
+
+  // Fill remaining properties from schema + config
+  const schema = getSchemaForField(field);
+  for (const prop of schema) {
+    if (['choices', 'conditional_logic', 'required', 'instructions'].includes(prop.key)) continue;
+    if (prop.nested) continue; // wrapper.* handled above as whole object
+    if (base[prop.key] !== undefined) continue; // already set above (e.g. post_type, taxonomy)
+    base[prop.key] = field.config?.[prop.key] ?? prop.default;
   }
 
   return base;
@@ -406,7 +281,7 @@ function postTypeToACF(entity: Entity): ACFPostType {
 const WP_BUILTIN_TYPES = new Set(['post', 'page', 'attachment', 'revision', 'nav_menu_item']);
 
 function isTaxonomyEntity(entity: Entity): boolean {
-  return entity.fields.some(
+  return allFields(entity).some(
     (f) => f.type.kind === 'ref' && f.type.target === entity.id
   );
 }
@@ -418,30 +293,31 @@ export function exportToACF(entities: Entity[]): unknown[] {
   const taxEntities = entities.filter(isTaxonomyEntity);
   const normalEntities = entities.filter((e) => !isTaxonomyEntity(e));
 
-  // For each normal entity: field group + post type
+  // For each normal entity: one field group per entity.groups entry
   for (const entity of normalEntities) {
     const slug = entitySlug(entity);
+    const groupDefaults = getDefaultGroupConfig();
 
-    // Filter out taxonomy ref fields from the field group (they become taxonomy associations)
-    const nonTaxFields = entity.fields.filter(
-      (f) => !(f.type.kind === 'ref' && f.type.cardinality === 'taxonomy')
-    );
+    for (const [groupIdx, group] of entity.groups.entries()) {
+      const nonTaxFields = group.fields.filter(
+        (f) => !(f.type.kind === 'ref' && f.type.cardinality === 'taxonomy')
+      );
+      if (nonTaxFields.length === 0) continue;
 
-    if (nonTaxFields.length > 0) {
       const fieldGroup: ACFFieldGroup = {
-        key: `group_${idToKey(entity.id)}`,
-        title: entity.name,
+        key: group.key || `group_${idToKey(group.id)}`,
+        title: group.title,
         fields: nonTaxFields.map((f) => fieldToACF(f, entities)),
         location: [[{ param: 'post_type', operator: '==', value: slug }]],
-        menu_order: 0,
-        position: 'normal',
-        style: 'default',
-        label_placement: 'top',
-        instruction_placement: 'label',
-        hide_on_screen: '',
+        menu_order: groupIdx,
+        position: (group.config?.position as string) ?? (groupDefaults.position as string),
+        style: (group.config?.style as string) ?? (groupDefaults.style as string),
+        label_placement: (group.config?.label_placement as string) ?? (groupDefaults.label_placement as string),
+        instruction_placement: (group.config?.instruction_placement as string) ?? (groupDefaults.instruction_placement as string),
+        hide_on_screen: serializeHideOnScreen(group.config?.hide_on_screen),
         active: true,
-        description: '',
-        show_in_rest: 0,
+        description: (group.config?.description as string) ?? '',
+        show_in_rest: (group.config?.show_in_rest as number) ?? 0,
       };
       result.push(fieldGroup);
     }
@@ -449,10 +325,9 @@ export function exportToACF(entities: Entity[]): unknown[] {
 
   // For each taxonomy entity: taxonomy definition
   for (const taxEntity of taxEntities) {
-    // Find which normal entities reference this taxonomy
     const objectTypes = normalEntities
       .filter((e) =>
-        e.fields.some(
+        allFields(e).some(
           (f) => f.type.kind === 'ref' && f.type.cardinality === 'taxonomy' && f.type.target === taxEntity.id
         )
       )

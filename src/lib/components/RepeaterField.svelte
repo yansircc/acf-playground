@@ -22,8 +22,8 @@
     return Array.isArray(val) ? val : [{}];
   }
 
-  function addSubField(fieldType: FieldType) {
-    store.addSubField(entity.id, field.id, fieldType);
+  function addSubField(fieldType: FieldType, initialConfig?: Record<string, unknown>) {
+    store.addSubField(entity.id, field.id, fieldType, initialConfig);
   }
 
   function removeSubField(subFieldId: string) {
@@ -95,7 +95,8 @@
         } else {
           const subtype = sel.value as AtomSubtype;
           const opt = ATOM_GROUPS.flatMap(g => g.options).find(o => o.value === subtype);
-          addSubField(opt ? opt.defaultFieldType() : { kind: 'atom', subtype });
+          const initialConfig = opt?.initialConfig?.();
+          addSubField(opt ? opt.defaultFieldType() : { kind: 'atom', subtype }, initialConfig);
         }
         sel.value = '';
       }}

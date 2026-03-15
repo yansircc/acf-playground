@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Handle, Position } from '@xyflow/svelte';
   import type { NodeProps } from '@xyflow/svelte';
-  import type { Entity, FieldType } from '$lib/types';
+  import type { Entity, Field, FieldType } from '$lib/types';
+  import { allFields } from '$lib/types';
   import { store } from '$lib/store.svelte';
   import { REORDER_MIME, isReorderDrag, computeMoveIndex } from '$lib/field-dnd';
   import { tick } from 'svelte';
@@ -10,6 +11,8 @@
 
   const entity: Entity = $derived(data.entity as Entity);
   const isSelected: boolean = $derived(data.selected as boolean);
+  const flatFields = $derived(allFields(entity));
+  const showGroupSeparators = $derived(entity.groups.length > 1);
 
   function fieldIcon(type: FieldType): string {
     switch (type.kind) {
@@ -96,6 +99,15 @@
     store.removeField(entity.id, fieldId);
   }
 
+  // Find which group a field belongs to and its index within that group
+  function findFieldGroupInfo(fieldId: string): { groupId: string; index: number } | null {
+    for (const group of entity.groups) {
+      const idx = group.fields.findIndex(f => f.id === fieldId);
+      if (idx !== -1) return { groupId: group.id, index: idx };
+    }
+    return null;
+  }
+
   // === 字段拖拽排序 ===
   let dragFieldId: string | null = $state(null);
   let dropTargetFieldId: string | null = $state(null);
@@ -132,13 +144,25 @@
     e.stopPropagation();
 
     const sourceFieldId = e.dataTransfer!.getData(REORDER_MIME);
-    const fromIndex = entity.fields.findIndex((f) => f.id === sourceFieldId);
-    const targetIndex = entity.fields.findIndex((f) => f.id === targetFieldId);
+    const sourceInfo = findFieldGroupInfo(sourceFieldId);
+    const targetInfo = findFieldGroupInfo(targetFieldId);
+
+    // Only allow reorder within the same group
+    if (!sourceInfo || !targetInfo || sourceInfo.groupId !== targetInfo.groupId) {
+      dragFieldId = null;
+      dropTargetFieldId = null;
+      dropPosition = null;
+      return;
+    }
+
+    const group = entity.groups.find(g => g.id === sourceInfo.groupId);
+    if (!group) return;
+
     const pos = dropPosition ?? 'below';
-    const toIndex = computeMoveIndex(fromIndex, targetIndex, pos, entity.fields.length);
+    const toIndex = computeMoveIndex(sourceInfo.index, targetInfo.index, pos, group.fields.length);
 
     if (toIndex !== -1) {
-      store.moveField(entity.id, fromIndex, toIndex);
+      store.moveField(entity.id, sourceInfo.index, toIndex, sourceInfo.groupId);
     }
 
     dragFieldId = null;
@@ -189,64 +213,72 @@
       if (!isReorderDrag(e)) return;
       e.preventDefault();
       e.stopPropagation();
+      // Drop at end of entity — find source field's group and move to end
       const sourceFieldId = e.dataTransfer!.getData(REORDER_MIME);
-      const fromIndex = entity.fields.findIndex((f) => f.id === sourceFieldId);
-      if (fromIndex === -1) return;
-      const toIndex = entity.fields.length - 1;
-      if (fromIndex !== toIndex) {
-        store.moveField(entity.id, fromIndex, toIndex);
+      const sourceInfo = findFieldGroupInfo(sourceFieldId);
+      if (!sourceInfo) return;
+      const group = entity.groups.find(g => g.id === sourceInfo.groupId);
+      if (!group) return;
+      const toIndex = group.fields.length - 1;
+      if (sourceInfo.index !== toIndex) {
+        store.moveField(entity.id, sourceInfo.index, toIndex, sourceInfo.groupId);
       }
       dragFieldId = null;
       dropTargetFieldId = null;
       dropPosition = null;
     }}
   >
-    {#if entity.fields.length === 0}
+    {#if flatFields.length === 0}
       <div class="empty-hint">拖入字段到此处</div>
     {/if}
-    {#each entity.fields as field (field.id)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="field-row"
-        class:dragging={dragFieldId === field.id}
-        class:drag-over-above={dropTargetFieldId === field.id && dropPosition === 'above'}
-        class:drag-over-below={dropTargetFieldId === field.id && dropPosition === 'below'}
-        ondragover={(e) => handleFieldDragOver(e, field.id)}
-        ondrop={(e) => handleFieldDrop(e, field.id)}
-        ondragleave={handleFieldDragLeave}
-      >
+    {#each entity.groups as group}
+      {#if showGroupSeparators && group.fields.length > 0}
+        <div class="group-separator">── {group.title} ──</div>
+      {/if}
+      {#each group.fields as field (field.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <span
-          class="drag-grip nodrag"
-          draggable="true"
-          ondragstart={(e) => handleFieldDragStart(e, field.id)}
-          ondragend={handleFieldDragEnd}
-        >⠿</span>
-        <span class="field-icon">{fieldIcon(field.type)}</span>
-        {#if editingFieldId === field.id}
-          <input
-            class="edit-field-name"
-            bind:this={editFieldInput}
-            bind:value={editFieldName}
-            onblur={() => commitFieldEdit(field.id, field.name)}
-            onkeydown={(e) => { if (e.key === 'Enter') commitFieldEdit(field.id, field.name); if (e.key === 'Escape') editingFieldId = null; }}
-          />
-        {:else}
-          <span class="field-name" ondblclick={() => startFieldEdit(field.id, field.name)} role="textbox" tabindex="0">{field.name}</span>
-        {/if}
-        <button class="field-remove" onclick={() => removeField(field.id)}>&times;</button>
-        {#if field.type.kind === 'ref'}
-          <Handle type="source" position={Position.Right} id={field.id} />
-          <Handle type="target" position={Position.Right} id="{field.id}-target" class="ref-target-handle" />
-        {:else if field.type.kind === 'repeat'}
-          {#each field.type.fields as subField (subField.id)}
-            {#if subField.type.kind === 'ref'}
-              <Handle type="source" position={Position.Right} id={subField.id} />
-              <Handle type="target" position={Position.Right} id="{subField.id}-target" class="ref-target-handle" />
-            {/if}
-          {/each}
-        {/if}
-      </div>
+        <div
+          class="field-row"
+          class:dragging={dragFieldId === field.id}
+          class:drag-over-above={dropTargetFieldId === field.id && dropPosition === 'above'}
+          class:drag-over-below={dropTargetFieldId === field.id && dropPosition === 'below'}
+          ondragover={(e) => handleFieldDragOver(e, field.id)}
+          ondrop={(e) => handleFieldDrop(e, field.id)}
+          ondragleave={handleFieldDragLeave}
+        >
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            class="drag-grip nodrag"
+            draggable="true"
+            ondragstart={(e) => handleFieldDragStart(e, field.id)}
+            ondragend={handleFieldDragEnd}
+          >⠿</span>
+          <span class="field-icon">{fieldIcon(field.type)}</span>
+          {#if editingFieldId === field.id}
+            <input
+              class="edit-field-name"
+              bind:this={editFieldInput}
+              bind:value={editFieldName}
+              onblur={() => commitFieldEdit(field.id, field.name)}
+              onkeydown={(e) => { if (e.key === 'Enter') commitFieldEdit(field.id, field.name); if (e.key === 'Escape') editingFieldId = null; }}
+            />
+          {:else}
+            <span class="field-name" ondblclick={() => startFieldEdit(field.id, field.name)} role="textbox" tabindex="0">{field.name}</span>
+          {/if}
+          <button class="field-remove" onclick={() => removeField(field.id)}>&times;</button>
+          {#if field.type.kind === 'ref'}
+            <Handle type="source" position={Position.Right} id={field.id} />
+            <Handle type="target" position={Position.Right} id="{field.id}-target" class="ref-target-handle" />
+          {:else if field.type.kind === 'repeat'}
+            {#each field.type.fields as subField (subField.id)}
+              {#if subField.type.kind === 'ref'}
+                <Handle type="source" position={Position.Right} id={subField.id} />
+                <Handle type="target" position={Position.Right} id="{subField.id}-target" class="ref-target-handle" />
+              {/if}
+            {/each}
+          {/if}
+        </div>
+      {/each}
     {/each}
   </div>
 </div>
@@ -279,21 +311,15 @@
     font-size: $font-size-base;
   }
 
-  // header target handle 定位到标题栏垂直中心
   :global(.target-handle) {
     top: 18px !important;
   }
 
-  // ref 字段的 target handle 与 source handle 重叠在右侧，视觉上只显示一个点
-  // pointer-events: none 防止拦截 source handle 的 mousedown
-  // SvelteFlow 的连线终点检测基于位置，不需要 pointer 事件
-  // 需要 !important 覆盖 SvelteFlow 的内联 pointer-events: all
   :global(.ref-target-handle) {
     opacity: 0 !important;
     pointer-events: none !important;
   }
 
-  // source handle 加大点击区域
   :global(.svelte-flow__handle-right.svelte-flow__handle-source) {
     width: 14px !important;
     height: 14px !important;
@@ -334,6 +360,15 @@
     font-style: italic;
     padding: $spacing-sm;
     text-align: center;
+  }
+
+  .group-separator {
+    text-align: center;
+    font-size: $font-size-xs;
+    color: $color-text-muted;
+    padding: $spacing-xs 0;
+    font-weight: 500;
+    letter-spacing: 0.05em;
   }
 
   .field-row {

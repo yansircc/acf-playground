@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import type { StoreState } from '$lib/types';
+import { normalizeStoreState } from '$lib/store-import';
 
 // Module-level pending state (dev server 重启清零)
 let pendingState: StoreState | null = null;
@@ -17,7 +18,7 @@ function validateStoreState(raw: unknown): StoreState {
     const e = entity as Record<string, unknown>;
     if (typeof e.id !== 'string') throw new Error('Entity must have string id');
     if (typeof e.name !== 'string') throw new Error('Entity must have string name');
-    if (!Array.isArray(e.fields)) throw new Error('Entity must have fields array');
+    if (!Array.isArray(e.groups)) throw new Error('Entity must have groups array');
   }
 
   return raw as StoreState;
@@ -26,7 +27,7 @@ function validateStoreState(raw: unknown): StoreState {
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
-    pendingState = validateStoreState(body);
+    pendingState = validateStoreState(normalizeStoreState(body));
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'Content-Type': 'application/json' },
     });

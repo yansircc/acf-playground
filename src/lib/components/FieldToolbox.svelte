@@ -19,10 +19,9 @@
 
   function handleAtomDragStart(event: DragEvent, opt: AtomOption) {
     if (!event.dataTransfer) return;
-    event.dataTransfer.setData(
-      'application/acf-field',
-      JSON.stringify({ action: 'add-field', fieldType: opt.defaultFieldType() })
-    );
+    const payload: Record<string, unknown> = { action: 'add-field', fieldType: opt.defaultFieldType() };
+    if (opt.initialConfig) payload.initialConfig = opt.initialConfig();
+    event.dataTransfer.setData('application/acf-field', JSON.stringify(payload));
     event.dataTransfer.effectAllowed = 'copy';
   }
 

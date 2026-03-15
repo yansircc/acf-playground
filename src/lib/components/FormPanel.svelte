@@ -1,20 +1,30 @@
 <script lang="ts">
-  import type { FieldType, Entity } from '$lib/types';
+  import type { FieldType, Entity, FieldGroup } from '$lib/types';
+  import { allFields } from '$lib/types';
   import { store } from '$lib/store.svelte';
   import { generateRefValue } from '$lib/mock-data';
   import TaxonomyEditor from './TaxonomyEditor.svelte';
   import RefField from './RefField.svelte';
   import RepeaterField from './RepeaterField.svelte';
   import AtomField from './AtomField.svelte';
+  import FieldSettingsPanel from './FieldSettingsPanel.svelte';
+  import GroupSettingsPanel from './GroupSettingsPanel.svelte';
+  import { tick } from 'svelte';
 
   let { width = 340 }: { width?: number } = $props();
 
   const entity: Entity | undefined = $derived(store.currentEntity);
   const data: Record<string, unknown>[] = $derived(store.currentData);
+  const showGroupTabs = $derived(entity ? entity.groups.length > 1 || entity.groups.some(g => g.config && Object.keys(g.config).length > 0) : false);
 
   // 多行展开状态
   let expandedRow: number | null = $state(null);
   let aiMockLoading = $state(false);
+  let expandedFieldSettings: string | null = $state(null);
+  let expandedGroupSettings: string | null = $state(null);
+  let editingGroupId: string | null = $state(null);
+  let editGroupName = $state('');
+  let editGroupInput: HTMLInputElement | undefined = $state();
 
   // 当实体切换时重置展开状态；只有 1 行时自动展开
   let lastEntityId: string | null = null;
@@ -23,13 +33,15 @@
     if (eid !== lastEntityId) {
       lastEntityId = eid;
       expandedRow = data.length === 1 ? 0 : null;
+      expandedFieldSettings = null;
+      expandedGroupSettings = null;
     }
   });
 
   function getRowTitle(entityId: string, rowIndex: number): string {
     const ent = store.entities.find((e) => e.id === entityId);
     if (!ent) return `记录 #${rowIndex + 1}`;
-    const textField = ent.fields.find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
+    const textField = allFields(ent).find((f) => f.type.kind === 'atom' && f.type.subtype === 'text');
     if (!textField) return `记录 #${rowIndex + 1}`;
     const val = store.data[entityId]?.[rowIndex]?.[textField.id];
     return (val as string) || `记录 #${rowIndex + 1}`;
@@ -88,7 +100,7 @@
       }
       const { rows } = await res.json();
       for (const row of rows) {
-        for (const field of entity.fields) {
+        for (const field of allFields(entity)) {
           if (field.type.kind === 'ref') {
             row[field.id] = generateRefValue(field, store.data);
           }
@@ -154,6 +166,44 @@
     if (!entity) return false;
     return store.isSelfRefEntity(entity.id);
   }
+
+  function toggleFieldSettings(fieldId: string) {
+    expandedFieldSettings = expandedFieldSettings === fieldId ? null : fieldId;
+  }
+
+  function handleAddGroup() {
+    if (!entity) return;
+    store.addGroup(entity.id, `组 ${entity.groups.length + 1}`);
+  }
+
+  function handleRemoveGroup(groupId: string) {
+    if (!entity) return;
+    if (entity.groups.length <= 1) return;
+    if (!confirm('确定删除此字段组？组内所有字段数据将被删除。')) return;
+    store.removeGroup(entity.id, groupId);
+  }
+
+  async function startGroupEdit(groupId: string, currentTitle: string) {
+    editingGroupId = groupId;
+    editGroupName = currentTitle;
+    await tick();
+    editGroupInput?.focus();
+    editGroupInput?.select();
+  }
+
+  function commitGroupEdit(groupId: string) {
+    const trimmed = editGroupName.trim();
+    if (trimmed && entity) {
+      store.renameGroup(entity.id, groupId, trimmed);
+    }
+    editingGroupId = null;
+  }
+
+  function handleRemoveField(fieldId: string) {
+    if (!entity) return;
+    store.removeField(entity.id, fieldId);
+  }
+
 </script>
 
 <div class="form-panel" style="width: {width}px">
@@ -172,11 +222,11 @@
           if (!val) (e.target as HTMLInputElement).value = entity.name;
         }}
       />
-      <span class="field-count">{entity.fields.length} 个字段</span>
+      <span class="field-count">{allFields(entity).length} 个字段</span>
     </div>
 
     <div class="form-body">
-      {#if entity.fields.length === 0}
+      {#if allFields(entity).length === 0 && !isTaxonomyEntity()}
         <div class="empty-state">
           从上方拖拽字段到画布中的实体节点
         </div>
@@ -185,8 +235,64 @@
       {#if isTaxonomyEntity()}
         <TaxonomyEditor {entity} />
 
-      {:else if entity.fields.length > 0}
-        <!-- Normal entity: multi-row list + expand -->
+      {:else if allFields(entity).length > 0}
+        <!-- Schema: Group Tabs + Field List -->
+        {#if showGroupTabs}
+          <div class="group-tabs">
+            {#each entity.groups as group (group.id)}
+              {#if editingGroupId === group.id}
+                <input
+                  class="group-tab-edit"
+                  bind:this={editGroupInput}
+                  bind:value={editGroupName}
+                  onblur={() => commitGroupEdit(group.id)}
+                  onkeydown={(e) => { if (e.key === 'Enter') commitGroupEdit(group.id); if (e.key === 'Escape') editingGroupId = null; }}
+                />
+              {:else}
+                <button
+                  class="group-tab"
+                  class:active={store.activeGroupId[entity.id] === group.id}
+                  ondblclick={() => startGroupEdit(group.id, group.title)}
+                  onclick={() => store.setActiveGroup(entity.id, group.id)}
+                >
+                  {group.title}
+                </button>
+                <span class="group-settings-toggle" onclick={(e) => { e.stopPropagation(); expandedGroupSettings = expandedGroupSettings === group.id ? null : group.id; }} role="button" tabindex="0" title="组设置">⚙</span>
+              {/if}
+            {/each}
+            <button class="group-tab group-tab-add" onclick={handleAddGroup}>+ 新组</button>
+          </div>
+          {#if expandedGroupSettings}
+            <GroupSettingsPanel entityId={entity.id} groupId={expandedGroupSettings} />
+            {#if entity.groups.length > 1}
+              <button class="remove-group-btn" onclick={() => handleRemoveGroup(expandedGroupSettings!)}>删除此组</button>
+            {/if}
+          {/if}
+        {/if}
+
+        <!-- Field list for active group (or all fields if single group) -->
+        {@const activeGroup = entity.groups.find(g => g.id === store.activeGroupId[entity.id]) ?? entity.groups[0]}
+        {#if activeGroup}
+          <div class="schema-field-list">
+            {#each activeGroup.fields as field (field.id)}
+              <div class="schema-field-item">
+                <div class="schema-field-row">
+                  <span class="field-type-badge" class:taxonomy={field.type.kind === 'ref' && field.type.cardinality === 'taxonomy'}>{subtypeLabel(field.type)}</span>
+                  <span class="schema-field-name">{field.name}</span>
+                  <button class="schema-field-action" onclick={() => toggleFieldSettings(field.id)} title="字段设置">⚙</button>
+                  <button class="schema-field-action danger" onclick={() => handleRemoveField(field.id)} title="删除字段">&times;</button>
+                </div>
+                {#if expandedFieldSettings === field.id}
+                  <FieldSettingsPanel {field} entityId={entity.id} />
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="section-divider"></div>
+
+        <!-- Data: multi-row list + expand -->
         <div class="row-list-header">
           <span class="row-count">{data.length} 条记录</span>
           <div class="row-actions">
@@ -209,7 +315,7 @@
 
               {#if expandedRow === ri}
                 <div class="row-fields">
-                  {#each entity.fields as field (field.id)}
+                  {#each allFields(entity) as field (field.id)}
                     <div class="field-group">
                       <div class="field-header">
                         <span class="field-type-badge" class:taxonomy={field.type.kind === 'ref' && field.type.cardinality === 'taxonomy'}>{subtypeLabel(field.type)}</span>
@@ -489,5 +595,133 @@
       justify-content: center;
       height: 100%;
     }
+  }
+
+  // === Group tabs ===
+
+  .group-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-bottom: $spacing-sm;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px solid $color-border-light;
+  }
+
+  .group-tab {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    padding: $spacing-xs $spacing-sm;
+    border: 1px solid $color-border-light;
+    border-radius: $border-radius;
+    font-size: $font-size-xs;
+    font-weight: 500;
+    cursor: pointer;
+    background: $color-surface;
+    color: $color-text-secondary;
+
+    &.active {
+      background: $color-primary-lighter;
+      border-color: $color-primary;
+      color: $color-primary;
+    }
+
+    &:hover:not(.active) {
+      border-color: $color-primary;
+    }
+  }
+
+  .group-tab-add {
+    border-style: dashed;
+    color: $color-primary;
+  }
+
+  .group-tab-edit {
+    padding: $spacing-xs $spacing-sm;
+    border: 1px solid $color-primary;
+    border-radius: $border-radius;
+    font-size: $font-size-xs;
+    font-weight: 500;
+    outline: none;
+    width: 80px;
+  }
+
+  .group-settings-toggle {
+    font-size: $font-size-xs;
+    opacity: 0.5;
+    padding: 0 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+
+    &:hover { opacity: 1; }
+  }
+
+  .remove-group-btn {
+    font-size: $font-size-xs;
+    color: $color-danger;
+    padding: $spacing-xs $spacing-sm;
+    background: none;
+    border: 1px solid $color-danger;
+    border-radius: $border-radius;
+    cursor: pointer;
+    margin-bottom: $spacing-sm;
+    opacity: 0.7;
+
+    &:hover { opacity: 1; }
+  }
+
+  // === Schema field list ===
+
+  .schema-field-list {
+    margin-bottom: $spacing-sm;
+  }
+
+  .schema-field-item {
+    border: 1px solid $color-border-light;
+    border-radius: $border-radius;
+    margin-bottom: 2px;
+    overflow: hidden;
+  }
+
+  .schema-field-row {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-xs $spacing-sm;
+
+    &:hover {
+      background: $color-bg-light;
+    }
+  }
+
+  .schema-field-name {
+    flex: 1;
+    font-size: $font-size-sm;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .schema-field-action {
+    font-size: $font-size-xs;
+    opacity: 0.4;
+    padding: 0 $spacing-xs;
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+
+    &:hover { opacity: 1; }
+    &.danger:hover { color: $color-danger; }
+  }
+
+  .section-divider {
+    height: 1px;
+    background: $color-border-light;
+    margin: $spacing-sm 0;
   }
 </style>
