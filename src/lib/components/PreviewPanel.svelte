@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/store.svelte';
-  import { allFields } from '$lib/types';
+  import { isTaxonomyEntity } from '$lib/wp-helpers';
   import iframeRuntime from '$lib/preview-runtime.js?raw';
   import {
     projectSchema,
@@ -60,14 +60,11 @@
   // === HTML Shell：客户端确定性生成 ===
 
   function buildShell(entityContents: Record<string, { listing: string; detail: string }>): string {
-    const isTaxEntity = (e: typeof store.entities[0]) =>
-      allFields(e).some(f => f.type.kind === 'ref' && f.type.target === e.id);
-
     const names = store.entities.map((e) => e.name);
 
     const navItems = store.entities.map((entity) => {
       const safe = escapeAttr(entity.name);
-      if (isTaxEntity(entity)) {
+      if (isTaxonomyEntity(entity)) {
         return `<div class="nav-dropdown">
         <span data-nav="entity-${safe}" class="nav-tab nav-tab-tax">${safe} ▾</span>
         <div class="dropdown-menu" data-tax-menu="${safe}"></div>

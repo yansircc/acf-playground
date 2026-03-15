@@ -157,8 +157,9 @@ function pickCardSlots(fields: ProjectedField[]): CardSlots {
 // === Taxonomy 检测 ===
 
 function isTaxEntity(entity: ProjectedEntity): boolean {
-  // Taxonomy entity 有一个自引用 ref 字段（parent）
-  return entity.fields.some(f => isRef(f) && f.target === entity.name);
+  // Taxonomy entity: self-ref with cardinality 'taxonomy'
+  // Note: in projected schema, target is entity name (not id)
+  return entity.fields.some(f => isRef(f) && f.target === entity.name && f.cardinality === 'taxonomy');
 }
 
 // === Taxonomy 模板 ===
