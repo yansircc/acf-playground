@@ -1,7 +1,6 @@
 import type { Entity, Field } from './types';
 import { allFields } from './types';
 import { getSchemaForField, getDefaultGroupConfig } from './acf-field-schema';
-import { WP_BUILTIN_TYPES, isTaxonomyEntity } from './wp-helpers';
 
 // === ACF field (complete format matching WordPress ACF import) ===
 
@@ -26,11 +25,6 @@ type ACFFieldGroup = {
 type ACFTaxonomy = Record<string, unknown>;
 type ACFPostType = Record<string, unknown>;
 
-export type ExportOverrides = {
-  entitySlugs: Record<string, string>;  // entityId → slug
-  fieldNames: Record<string, string>;   // fieldId → snake_case name
-};
-
 // Use the entity/field ID directly (ACF uses 13-char hex keys)
 function idToKey(id: string): string {
   return id.replace(/-/g, '');
@@ -41,8 +35,7 @@ function toSnake(name: string): string {
 }
 
 // Get the slug for an entity: use preserved slug if available, else derive from name
-function entitySlug(entity: Entity, overrides?: ExportOverrides): string {
-  if (overrides?.entitySlugs[entity.id]) return overrides.entitySlugs[entity.id];
+function entitySlug(entity: Entity): string {
   return entity.slug || toSnake(entity.name);
 }
 
@@ -81,10 +74,10 @@ function serializeHideOnScreen(value: unknown): string | string[] {
 
 // === Field conversion (config-driven) ===
 
-function fieldToACF(field: Field, entities: Entity[], overrides?: ExportOverrides, parentRepeaterKey?: string): ACFField {
+function fieldToACF(field: Field, entities: Entity[], parentRepeaterKey?: string): ACFField {
   const ft = field.type;
   const key = `field_${idToKey(field.id)}`;
-  const name = overrides?.fieldNames[field.id] || toSnake(field.name);
+  const name = toSnake(field.name);
 
   const base: ACFField = {
     key,
@@ -113,19 +106,19 @@ function fieldToACF(field: Field, entities: Entity[], overrides?: ExportOverride
 
     case 'repeat':
       base.type = 'repeater';
-      base.sub_fields = ft.fields.map((f) => fieldToACF(f, entities, overrides, key));
+      base.sub_fields = ft.fields.map((f) => fieldToACF(f, entities, key));
       break;
 
     case 'ref': {
       const targetEntity = entities.find((e) => e.id === ft.target);
-      const targetSlug = targetEntity ? entitySlug(targetEntity, overrides) : 'post';
+      const targetSlug = targetEntity ? entitySlug(targetEntity) : 'post';
 
       if (ft.cardinality === '1') {
         base.type = 'post_object';
         base.post_type = [targetSlug];
       } else if (ft.cardinality === 'taxonomy') {
         base.type = 'taxonomy';
-        base.taxonomy = targetEntity ? entitySlug(targetEntity, overrides) : 'category';
+        base.taxonomy = targetEntity ? entitySlug(targetEntity) : 'category';
       } else {
         base.type = 'relationship';
         base.post_type = [targetSlug];
@@ -148,8 +141,8 @@ function fieldToACF(field: Field, entities: Entity[], overrides?: ExportOverride
 
 // === Taxonomy entity → ACF taxonomy definition ===
 
-function taxonomyToACF(entity: Entity, objectTypes: string[], overrides?: ExportOverrides): ACFTaxonomy {
-  const slug = entitySlug(entity, overrides);
+function taxonomyToACF(entity: Entity, objectTypes: string[]): ACFTaxonomy {
+  const slug = entitySlug(entity);
   const name = entity.name;
   return {
     key: `taxonomy_${idToKey(entity.id)}`,
@@ -217,8 +210,8 @@ function taxonomyToACF(entity: Entity, objectTypes: string[], overrides?: Export
 
 // === Normal entity → ACF post type definition ===
 
-function postTypeToACF(entity: Entity, overrides?: ExportOverrides): ACFPostType {
-  const slug = entitySlug(entity, overrides);
+function postTypeToACF(entity: Entity): ACFPostType {
+  const slug = entitySlug(entity);
   const name = entity.name;
   return {
     key: `post_type_${entity.postTypeKey || idToKey(entity.id)}`,
@@ -284,7 +277,16 @@ function postTypeToACF(entity: Entity, overrides?: ExportOverrides): ACFPostType
 
 // === Main export ===
 
-export function exportToACF(entities: Entity[], overrides?: ExportOverrides): unknown[] {
+// Built-in WordPress post types that don't need post_type_ definitions
+const WP_BUILTIN_TYPES = new Set(['post', 'page', 'attachment', 'revision', 'nav_menu_item']);
+
+function isTaxonomyEntity(entity: Entity): boolean {
+  return allFields(entity).some(
+    (f) => f.type.kind === 'ref' && f.type.target === entity.id
+  );
+}
+
+export function exportToACF(entities: Entity[]): unknown[] {
   const result: unknown[] = [];
 
   // Classify entities
@@ -293,7 +295,7 @@ export function exportToACF(entities: Entity[], overrides?: ExportOverrides): un
 
   // For each normal entity: one field group per entity.groups entry
   for (const entity of normalEntities) {
-    const slug = entitySlug(entity, overrides);
+    const slug = entitySlug(entity);
     const groupDefaults = getDefaultGroupConfig();
 
     for (const [groupIdx, group] of entity.groups.entries()) {
@@ -305,7 +307,7 @@ export function exportToACF(entities: Entity[], overrides?: ExportOverrides): un
       const fieldGroup: ACFFieldGroup = {
         key: group.key || `group_${idToKey(group.id)}`,
         title: group.title,
-        fields: nonTaxFields.map((f) => fieldToACF(f, entities, overrides)),
+        fields: nonTaxFields.map((f) => fieldToACF(f, entities)),
         location: [[{ param: 'post_type', operator: '==', value: slug }]],
         menu_order: groupIdx,
         position: (group.config?.position as string) ?? (groupDefaults.position as string),
@@ -329,16 +331,16 @@ export function exportToACF(entities: Entity[], overrides?: ExportOverrides): un
           (f) => f.type.kind === 'ref' && f.type.cardinality === 'taxonomy' && f.type.target === taxEntity.id
         )
       )
-      .map((e) => entitySlug(e, overrides));
+      .map((e) => entitySlug(e));
 
-    result.push(taxonomyToACF(taxEntity, objectTypes.length > 0 ? objectTypes : ['post'], overrides));
+    result.push(taxonomyToACF(taxEntity, objectTypes.length > 0 ? objectTypes : ['post']));
   }
 
   // Post type definitions for normal entities (skip built-in WP types)
   for (const entity of normalEntities) {
-    const slug = entitySlug(entity, overrides);
+    const slug = entitySlug(entity);
     if (!WP_BUILTIN_TYPES.has(slug)) {
-      result.push(postTypeToACF(entity, overrides));
+      result.push(postTypeToACF(entity));
     }
   }
 

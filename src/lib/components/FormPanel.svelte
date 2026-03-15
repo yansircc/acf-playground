@@ -164,7 +164,7 @@
 
   function isTaxonomyEntity(): boolean {
     if (!entity) return false;
-    return store.isTaxonomyEntity(entity.id);
+    return store.isSelfRefEntity(entity.id);
   }
 
   function toggleFieldSettings(fieldId: string) {
