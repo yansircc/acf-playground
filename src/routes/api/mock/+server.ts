@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import type { Entity, Field, FieldType } from '$lib/types';
+import { allFields } from '$lib/types';
 import { env } from '$env/dynamic/private';
 
 /** 从 Field 构建 JSON Schema property（递归处理 repeat） */
@@ -7,7 +8,7 @@ function fieldToSchemaProperty(field: Field): Record<string, unknown> | null {
 	const ft = field.type;
 
 	if (ft.kind === 'atom') {
-		return atomToSchema(field.name, ft);
+		return atomToSchema(field, ft);
 	}
 
 	if (ft.kind === 'repeat') {
@@ -33,10 +34,11 @@ function fieldToSchemaProperty(field: Field): Record<string, unknown> | null {
 }
 
 function atomToSchema(
-	fieldName: string,
+	field: Field,
 	ft: Extract<FieldType, { kind: 'atom' }>
 ): Record<string, unknown> {
 	const sub = ft.subtype;
+	const fieldName = field.name;
 
 	if (sub === 'number' || sub === 'range') {
 		return { type: 'number', description: `${fieldName} (${sub})` };
@@ -57,14 +59,14 @@ function atomToSchema(
 		};
 	}
 	if (sub === 'select' || sub === 'radio') {
-		const choices = ft.choices ?? [];
+		const choices = field.config?.choices as string[] ?? [];
 		if (choices.length > 0) {
 			return { type: 'string', enum: choices, description: `${fieldName} (pick from choices)` };
 		}
 		return { type: 'string', description: `${fieldName} (${sub})` };
 	}
 	if (sub === 'checkbox') {
-		const choices = ft.choices ?? [];
+		const choices = field.config?.choices as string[] ?? [];
 		if (choices.length > 0) {
 			return {
 				type: 'array',
@@ -92,8 +94,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		// 构建 tool schema properties
 		const properties: Record<string, unknown> = {};
 		const required: string[] = [];
+		const fields = allFields(entity);
 
-		for (const field of entity.fields) {
+		for (const field of fields) {
 			const prop = fieldToSchemaProperty(field);
 			if (prop) {
 				properties[field.id] = prop;
@@ -123,7 +126,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		};
 
 		// 构建字段描述供 system prompt
-		const fieldSummary = entity.fields
+		const fieldSummary = fields
 			.filter((f) => f.type.kind !== 'ref')
 			.map((f) => `- ${f.name}`)
 			.join('\n');

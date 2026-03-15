@@ -1,4 +1,5 @@
 import type { StoreState } from './types';
+import { normalizeStoreState } from './store-import';
 
 const CHANNEL_NAME = 'acf-store';
 const STORAGE_KEY = 'acf-store-state';
@@ -32,11 +33,12 @@ export function startBroadcasting(store: Storelike): () => void {
  * 预览窗口调用：先从 localStorage 恢复初始状态，再监听实时广播
  */
 export function startListening(store: Storelike): () => void {
-  // 立即从 localStorage 恢复
+  // 立即从 localStorage 恢复（normalize legacy format）
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      store.hydrate(JSON.parse(saved));
+      const raw = JSON.parse(saved);
+      store.hydrate(normalizeStoreState(raw) as StoreState);
     }
   } catch {
     // parse 失败就忽略

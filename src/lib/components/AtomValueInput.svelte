@@ -16,9 +16,7 @@
   } = $props();
 
   const subtype = $derived(field.type.kind === 'atom' ? field.type.subtype : 'text');
-  const choices = $derived(
-    field.type.kind === 'atom' && 'choices' in field.type ? (field.type.choices ?? []) : []
-  );
+  const choices = $derived(field.config?.choices as string[] ?? []);
 </script>
 
 <div class="atom-value-input" class:variant-table={variant === 'table'} class:variant-compact={variant === 'compact'}>

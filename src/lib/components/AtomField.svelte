@@ -23,6 +23,7 @@
   ]);
 
   const isEnhanced = $derived(ENHANCED_SUBTYPES.has(subtype));
+  const choices = $derived(field.config?.choices as string[] ?? []);
 
   // oEmbed URL → embed URL 转换
   function toEmbedUrl(url: string): string | null {
@@ -63,26 +64,28 @@
 
   // 选项管理
   function addChoice() {
-    if (field.type.kind !== 'atom' || !('choices' in field.type)) return;
-    const choices = field.type.choices ?? [];
-    field.type.choices = [...choices, `选项 ${choices.length + 1}`];
+    const choices = field.config?.choices as string[] ?? [];
+    if (!field.config) field.config = {};
+    field.config.choices = [...choices, `选项 ${choices.length + 1}`];
   }
 
   function removeChoice(index: number) {
-    if (field.type.kind !== 'atom' || !field.type.choices) return;
-    field.type.choices = field.type.choices.filter((_, i) => i !== index);
+    const choices = field.config?.choices as string[] | undefined;
+    if (!choices) return;
+    field.config!.choices = choices.filter((_, i) => i !== index);
   }
 
   function updateChoice(index: number, val: string) {
-    if (field.type.kind !== 'atom' || !field.type.choices) return;
-    field.type.choices[index] = val;
+    const choices = field.config?.choices as string[] | undefined;
+    if (!choices) return;
+    choices[index] = val;
   }
 </script>
 
 {#snippet choicesEditor()}
-  {#if field.type.kind === 'atom' && 'choices' in field.type}
+  {#if field.config?.choices}
     <div class="choices-editor">
-      {#each field.type.choices ?? [] as choice, ci}
+      {#each choices as choice, ci}
         <div class="choices-row">
           <input type="text" class="choices-input" value={choice}
             oninput={(e) => updateChoice(ci, (e.target as HTMLInputElement).value)} />
@@ -160,14 +163,14 @@
     value={value as string}
     onchange={(e) => onchange((e.target as HTMLSelectElement).value)}>
     <option value="">— 选择 —</option>
-    {#each field.type.kind === 'atom' && field.type.choices ? field.type.choices : [] as choice}
+    {#each choices as choice}
       <option value={choice}>{choice}</option>
     {/each}
   </select>
   {@render choicesEditor()}
 {:else if subtype === 'radio'}
   <div class="choice-group">
-    {#each field.type.kind === 'atom' && field.type.choices ? field.type.choices : [] as choice, ci}
+    {#each choices as choice, ci}
       <div class="choice-row">
         <label class="choice-item">
           <input type="radio" name="{field.id}-{rowIndex}"
@@ -184,7 +187,7 @@
   </div>
 {:else if subtype === 'checkbox'}
   <div class="choice-group">
-    {#each field.type.kind === 'atom' && field.type.choices ? field.type.choices : [] as choice, ci}
+    {#each choices as choice, ci}
       {@const currentVal = Array.isArray(value) ? value as string[] : []}
       <div class="choice-row">
         <label class="choice-item">

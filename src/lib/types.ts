@@ -14,7 +14,7 @@ export type AtomSubtype =
   | 'page_link' | 'user';
 
 export type FieldType =
-  | { kind: 'atom'; subtype: AtomSubtype; choices?: string[] }
+  | { kind: 'atom'; subtype: AtomSubtype }
   | { kind: 'repeat'; fields: Field[] }
   | { kind: 'ref'; target: string; cardinality: '1' | 'n' | 'taxonomy' };
 
@@ -22,12 +22,21 @@ export type Field = {
   id: string;
   name: string;
   type: FieldType;
+  config?: Record<string, unknown>;
+};
+
+export type FieldGroup = {
+  id: string;
+  title: string;
+  fields: Field[];
+  config?: Record<string, unknown>;
+  key?: string; // preserved ACF key for round-trip
 };
 
 export type Entity = {
   id: string;
   name: string;
-  fields: Field[];
+  groups: FieldGroup[];
   slug?: string; // preserved from ACF import for round-trip fidelity
   postTypeKey?: string; // original post_type_* key from ACF import
 };
@@ -51,3 +60,23 @@ export type DerivedEdge = {
   sourceHandle: string;
   target: string;
 };
+
+// === Helper functions ===
+
+/** Get all top-level fields from an entity (across all groups) */
+export function allFields(entity: Entity): Field[] {
+  return entity.groups.flatMap(g => g.fields);
+}
+
+/** Recursively find a field by ID, including repeater sub-fields */
+export function findFieldRecursive(entity: Entity, fieldId: string): Field | undefined {
+  for (const group of entity.groups) {
+    for (const f of group.fields) {
+      if (f.id === fieldId) return f;
+      if (f.type.kind === 'repeat') {
+        const sub = f.type.fields.find(sf => sf.id === fieldId);
+        if (sub) return sub;
+      }
+    }
+  }
+}

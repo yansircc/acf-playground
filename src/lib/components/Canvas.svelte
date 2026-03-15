@@ -5,6 +5,7 @@
   import EntityNode from './EntityNode.svelte';
   import { store } from '$lib/store.svelte';
   import type { FieldType } from '$lib/types';
+  import { allFields, findFieldRecursive } from '$lib/types';
 
   const nodeTypes: NodeTypes = { entity: EntityNode } as NodeTypes;
 
@@ -47,7 +48,7 @@
 
     for (const e of storeEdges) {
       const sourceEntity = store.entities.find((ent) => ent.id === e.source);
-      const sourceField = sourceEntity?.fields.find((f) => f.id === e.sourceHandle);
+      const sourceField = sourceEntity ? findFieldRecursive(sourceEntity, e.sourceHandle) : undefined;
       const isTaxonomy = sourceField?.type.kind === 'ref' && sourceField.type.cardinality === 'taxonomy';
       const color = isTaxonomy ? '#46b450' : '#0073aa';
 
@@ -128,7 +129,7 @@
       // 清除 source→target 方向
       const entity = store.entities.find((e) => e.id === edge.source);
       if (entity) {
-        const field = entity.fields.find((f) => f.id === edge.sourceHandle);
+        const field = findFieldRecursive(entity, edge.sourceHandle ?? '');
         if (field && field.type.kind === 'ref') {
           store.updateRefTarget(entity.id, field.id, '');
         }
@@ -136,7 +137,7 @@
       // 清除反向 target→source（如果存在双向 ref）
       const reverseEntity = store.entities.find((e) => e.id === edge.target);
       if (reverseEntity) {
-        for (const f of reverseEntity.fields) {
+        for (const f of allFields(reverseEntity)) {
           if (f.type.kind === 'ref' && f.type.target === edge.source) {
             store.updateRefTarget(reverseEntity.id, f.id, '');
           }
@@ -229,13 +230,13 @@
       }
 
       if (hitNodeId) {
-        store.addField(hitNodeId, ft);
+        store.addField(hitNodeId, ft, undefined, payload.initialConfig as Record<string, unknown> | undefined);
         store.setSelected(hitNodeId);
       } else {
         const name = prompt('创建新实体并添加此字段。\n实体名称：', '新实体');
         if (name) {
           const entity = store.addEntity(name, position);
-          store.addField(entity.id, ft);
+          store.addField(entity.id, ft, undefined, payload.initialConfig as Record<string, unknown> | undefined);
         }
       }
     }

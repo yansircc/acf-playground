@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/store.svelte';
+  import { allFields } from '$lib/types';
   import iframeRuntime from '$lib/preview-runtime.js?raw';
   import {
     projectSchema,
@@ -60,7 +61,7 @@
 
   function buildShell(entityContents: Record<string, { listing: string; detail: string }>): string {
     const isTaxEntity = (e: typeof store.entities[0]) =>
-      e.fields.some(f => f.type.kind === 'ref' && f.type.target === e.id);
+      allFields(e).some(f => f.type.kind === 'ref' && f.type.target === e.id);
 
     const names = store.entities.map((e) => e.name);
 
