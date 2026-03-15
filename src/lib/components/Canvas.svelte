@@ -275,5 +275,12 @@
     flex: 1;
     height: 100%;
     position: relative;
+
+    :global(.svelte-flow__pane.draggable) {
+      cursor: default;
+    }
+    :global(.svelte-flow__pane.dragging) {
+      cursor: grabbing;
+    }
   }
 </style>
