@@ -6,7 +6,7 @@
   import FormPanel from '$lib/components/FormPanel.svelte';
   import { store } from '$lib/store.svelte';
   import { startBroadcasting } from '$lib/store-sync';
-  import { fetchPendingState } from '$lib/store-import';
+  import { fetchPendingState, normalizeStoreState } from '$lib/store-import';
 
   let panelWidth = $state(340);
   let isDragging = $state(false);
@@ -35,7 +35,7 @@
     try {
       const saved = localStorage.getItem('acf-store-state');
       if (saved && store.entities.length === 0) {
-        store.hydrate(JSON.parse(saved));
+        store.hydrate(normalizeStoreState(JSON.parse(saved)) as any);
       }
     } catch { /* parse 失败就忽略 */ }
 
